@@ -23,18 +23,20 @@
   function dadosDaAba(wb, nome) {
     var ws = wb.Sheets[nome];
     if (!ws || !ws['!ref']) return { cab: [], linhas: [] };
-    var aoa = X.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: false });
+    var aoa = X.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: true });
+    var r0 = X.utils.decode_range(ws['!ref']).s.r;
     var cab = (aoa[0] || []).map(function (c) { return String(c == null ? '' : c).trim(); });
     while (cab.length && !cab[cab.length - 1]) cab.pop();
-    var w = cab.length;
-    var linhas = aoa.slice(1).filter(function (l) {
-      return l.some(function (c) { return c !== '' && c != null && String(c).trim() !== ''; });
-    }).map(function (l) {
+    var w = cab.length, linhas = [], indices = [];
+    for (var i = 1; i < aoa.length; i++) {
+      var l = aoa[i] || [];
+      if (!l.some(function (c) { return c !== '' && c != null && String(c).trim() !== ''; })) continue;
       l = l.slice(0, w);
       while (l.length < w) l.push('');
-      return l;
-    });
-    return { cab: cab, linhas: linhas };
+      linhas.push(l);
+      indices.push(r0 + i); // linha real na planilha (0 = cabeçalho)
+    }
+    return { cab: cab, linhas: linhas, indices: indices };
   }
 
   function estiloCabecalho() {
@@ -102,10 +104,11 @@
   /** ABA 1: gera "Faturas Pendentes – <Mês> – Semana N". */
   function gerarFaturas(wb, mes, semanaManual) {
     var semanas = R.semanasFaturas(wb.SheetNames, semanaManual);
-    var abas = [], resultado = [];
+    var abas = [], resultado = [], google = null;
     semanas.forEach(function (s) {
       var d = dadosDaAba(wb, s.aba);
       var a = R.analisarFaturas(d.cab, d.linhas, mes.chave);
+      google = { aba: s.aba, colunas: d.cab.length, indices: d.indices, cores: a.cores };
       abas.push(['Semana ' + s.n, abaDeDados(d.cab, d.linhas, a.cores)]);
       resultado.push({ n: s.n, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes });
     });
@@ -116,16 +119,18 @@
     abas.forEach(function (a) { X.utils.book_append_sheet(out, a[1], a[0]); });
     X.utils.book_append_sheet(out, abaSimples(['Instalação', 'Cliente', 'CPF/CNPJ', 'Detalhes'],
       ult.pendentes.map(function (p) { return [p.instalacao, p.cliente, p.cpfCnpj, p.info]; })), 'Pendentes – Semana ' + ult.n);
-    return { nomeGerado: 'Faturas Pendentes – ' + mes.rotulo + ' – Semana ' + ult.n, bytes: gravar(out), semanas: resultado };
+    return { nomeGerado: 'Faturas Pendentes – ' + mes.rotulo + ' – Semana ' + ult.n, bytes: gravar(out), semanas: resultado, google: google };
   }
 
   /** ABA 2: gera "Contratos sem Faturas – <Mês> – Semana N". */
   function gerarContratos(wb, mes, semanaManual) {
     var semanas = R.semanasContratos(wb.SheetNames, semanaManual);
-    var abas = [], resultado = [];
+    var abas = [], resultado = [], google = null;
     semanas.forEach(function (s) {
       var c = dadosDaAba(wb, s.c), f = dadosDaAba(wb, s.f);
       var a = R.analisarContratos(c.cab, c.linhas, f.cab, f.linhas);
+      google = { titulo: 'Contratos sem Fatura – Semana ' + s.n,
+        valores: [c.cab].concat(normalizarCodigos(c.cab, a.indices.map(function (i) { return c.linhas[i]; }))) };
       abas.push(['Semana ' + s.n, abaDeDados(c.cab, a.indices.map(function (i) { return c.linhas[i]; }), null)]);
       resultado.push({ n: s.n, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes });
     });
@@ -134,7 +139,7 @@
     X.utils.book_append_sheet(out, abaSimples(['Semana', 'Contratos vinculados', 'Com fatura gerada', 'Sem fatura'],
       resultado.map(function (s) { return ['Semana ' + s.n, s.total, s.comFatura, s.pendentes.length]; })), 'Resumo');
     abas.forEach(function (a) { X.utils.book_append_sheet(out, a[1], a[0]); });
-    return { nomeGerado: 'Contratos sem Faturas – ' + mes.rotulo + ' – Semana ' + ult.n, bytes: gravar(out), semanas: resultado };
+    return { nomeGerado: 'Contratos sem Faturas – ' + mes.rotulo + ' – Semana ' + ult.n, bytes: gravar(out), semanas: resultado, google: google };
   }
 
   /** Processa uma planilha já aberta. "nome" é o nome do arquivo ou o título da planilha do Google (de onde sai o mês). */

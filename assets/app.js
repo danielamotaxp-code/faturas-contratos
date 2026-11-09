@@ -4,7 +4,7 @@
   var A = window.Armazenamento, R = window.Regras, P = window.Planilhas;
   var USUARIOS_PADRAO = [['daniela', 'Daniela'], ['paula', 'Paula'], ['ytala', 'Ytala']];
   var ARQ_INDICE = 'dados/indice.json', ARQ_HIST = 'dados/historico.json', ARQ_CLIENTES = 'dados/clientes.json';
-  var estado = { chaveGoogle: '', modo: { faturas: 'link', contratos: 'link' }, alvo: {}, repo: null, nome: '', cofre: null, registros: [], progresso: null, progAba: 'faturas', progPeriodo: 'semanal' };
+  var estado = { chaveGoogle: '', clientIdGoogle: '', modo: { faturas: 'link', contratos: 'link' }, alvo: {}, repo: null, nome: '', cofre: null, registros: [], progresso: null, progAba: 'faturas', progPeriodo: 'semanal' };
 
   var TEXTOS = {
     faturas: {
@@ -278,10 +278,34 @@
         resultado = P.processarLivro(aba, g.titulo, wb, semana);
         conferirAlvo(aba, resultado);
         resultado.original = P.gravar(wb);
-        passo('Salvando a cópia da planilha enviada e a gerada…');
-        return salvarProcessamento(aba, g.titulo + '.xlsx', resultado, passo, g.link).then(function (reg) { return [reg, resultado]; });
+        passo('Salvando a cópia (Excel) da planilha como estava e a planilha gerada…');
+        return salvarProcessamento(aba, g.titulo + '.xlsx', resultado, passo, g.link).then(function (reg) {
+          return atualizarGoogle(aba, g, resultado, reg, passo).then(function () { return [reg, resultado]; });
+        });
       });
     }));
+  }
+
+  /** Atualiza a própria planilha do Google (só com "Entrar com Google"). Nunca impede o resto de ser salvo. */
+  function atualizarGoogle(aba, g, resultado, reg, passo) {
+    if (!window.Google.conectado()) {
+      reg.avisoGoogle = 'A planilha original do Google não foi alterada, porque ninguém entrou com Google. Clique em "Entrar com Google" para que a plataforma atualize a planilha direto no link.';
+      return Promise.resolve();
+    }
+    var x = resultado.google;
+    passo(aba === 'faturas' ? 'Pintando a aba "' + x.aba + '" na planilha do Google…' : 'Criando a aba "' + x.titulo + '" na planilha do Google…');
+    var escrita = aba === 'faturas'
+      ? window.Google.pintarAba(g, x.aba, x.colunas, x.indices, x.cores)
+      : window.Google.escreverAba(g, x.titulo, x.valores);
+    return escrita.then(function () {
+      reg.googleAtualizada = aba === 'faturas' ? 'Aba "' + x.aba + '" pintada' : 'Aba "' + x.titulo + '" criada';
+      return estado.repo.atualizarJSON(ARQ_INDICE, { registros: [] }, function (ind) {
+        (ind.registros || []).forEach(function (r) { if (r.id === reg.id) r.googleAtualizada = reg.googleAtualizada; });
+        return ind;
+      }, 'Índice: planilha do Google atualizada (' + estado.nome + ')').then(function (ind) { estado.registros = ind.registros; });
+    }).catch(function (err) {
+      reg.avisoGoogle = 'A planilha gerada e a cópia foram salvas, mas não consegui atualizar a planilha do Google: ' + err.message;
+    });
   }
 
   function concluir(aba, promessa) {
@@ -290,7 +314,9 @@
       var reg = par[0]; resultado = par[1];
       var st = mostrarStatus(aba, 'ok', '<b>' + esc(reg.nomeGerado) + '</b> gerada. Semana ' + esc(reg.semana) + ': ' +
         num(reg.semFatura) + ' ' + t.rotSem + ' de ' + num(reg.total) + ' ' + t.rotTotal + '. ' +
-        '<button class="btn btn-peq btn-primario" type="button">Baixar planilha gerada</button>');
+        '<button class="btn btn-peq btn-primario" type="button">Baixar planilha gerada</button>' +
+        (reg.googleAtualizada ? '<br>✔ Planilha do Google atualizada no mesmo link: ' + esc(reg.googleAtualizada) + '. <a href="' + esc(reg.linkOrigem) + '" target="_blank" rel="noopener">Abrir no Google</a>' : '') +
+        (reg.avisoGoogle ? '<br><span class="aviso-google">' + esc(reg.avisoGoogle) + '</span>' : ''));
       $('button', st).addEventListener('click', function () { baixarBytes(resultado.bytes, reg.nomeGerado + '.xlsx', XLSX_MIME); });
       estado.progresso = null;
       renderListas();
@@ -396,7 +422,7 @@
 
   function itemHtml(r, t) {
     return '<div class="item" data-id="' + esc(r.id) + '"><div>' +
-      '<div class="item-titulo">' + esc(r.nomeGerado) + '</div>' +
+      '<div class="item-titulo">' + esc(r.nomeGerado) + (r.googleAtualizada ? ' <span class="tag tag-ok" title="' + esc(r.googleAtualizada) + '">Google atualizado</span>' : '') + '</div>' +
       '<div class="item-meta">Gerada em ' + esc(dataHora(r.criadoEm)) + ' por ' + esc(r.usuario) +
         ' · semanas ' + esc(r.semanas) + ' · enviada: ' + esc(r.nomeOrigem) + '</div>' +
       '<div class="numeros"><span><b>' + num(r.total) + '</b> ' + t.rotTotal + '</span>' +
@@ -688,12 +714,28 @@
   function carregarChaveGoogle() {
     return fetch('assets/google.json?v=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : {}; })
-      .then(function (j) { estado.chaveGoogle = j.chave || ''; atualizarConfigGoogle(); })
+      .then(function (j) { estado.chaveGoogle = j.chave || ''; estado.clientIdGoogle = j.clientId || ''; atualizarConfigGoogle(); })
       .catch(function () { /* sem chave ainda */ });
   }
   function atualizarConfigGoogle() {
-    var s = $('#google-situacao');
-    if (s) s.innerHTML = estado.chaveGoogle ? '<span class="tag tag-ok">Configurada</span>' : '<span class="tag tag-pendente">Ainda não configurada</span>';
+    var ok = '<span class="tag tag-ok">Configurado</span>', nao = '<span class="tag tag-pendente">Ainda não configurado</span>';
+    $('#google-situacao').innerHTML = estado.chaveGoogle ? ok : nao;
+    $('#cliente-situacao').innerHTML = estado.clientIdGoogle ? ok : nao;
+    var b = $('#btn-google');
+    b.hidden = !estado.clientIdGoogle;
+    b.textContent = window.Google.conectado() ? 'Google conectado ✔' : 'Entrar com Google';
+    b.classList.toggle('conectado', window.Google.conectado());
+  }
+  $('#btn-google').addEventListener('click', function () {
+    if (window.Google.conectado()) { window.Google.sair(); atualizarConfigGoogle(); avisar('Google desconectado.'); return; }
+    window.Google.entrar(estado.clientIdGoogle).then(function () {
+      atualizarConfigGoogle();
+      avisar('Google conectado. Agora a plataforma atualiza a planilha direto no link.');
+    }).catch(function (err) { avisar(err.message); });
+  });
+  function salvarConfigGoogle(mudar) {
+    var site = new A.Repositorio(estado.repo.token, A.REPO_SITE);
+    return site.atualizarJSON('assets/google.json', {}, function (j) { mudar(j); return j; }, 'Configuração do Google atualizada');
   }
   $('#btn-config').addEventListener('click', function () {
     $$('.abas button').forEach(function (x) { x.classList.remove('ativa'); });
@@ -705,14 +747,23 @@
     var chave = $('#google-chave').value.trim(), btn = $('button[type="submit"]', e.target), msg = $('#google-msg');
     if (!/^AIza[0-9A-Za-z_-]{30,}$/.test(chave)) { msg.className = 'erro'; msg.textContent = 'A chave do Google começa com "AIza" e tem cerca de 39 caracteres.'; return; }
     btn.disabled = true; msg.className = ''; msg.textContent = 'Salvando…';
-    var site = new A.Repositorio(estado.repo.token, A.REPO_SITE);
-    site.info('assets/google.json').then(function (meta) {
-      return site.gravarBytes('assets/google.json', new TextEncoder().encode(JSON.stringify({ chave: chave }, null, 2)),
-        'Chave do Google Planilhas atualizada', meta && meta.sha);
-    }).then(function () {
+    salvarConfigGoogle(function (j) { j.chave = chave; }).then(function () {
       estado.chaveGoogle = chave; atualizarConfigGoogle();
       $('#google-chave').value = '';
       msg.textContent = 'Chave salva. Já dá para enviar planilhas pelo link (para as demais usuárias, em cerca de 1 minuto).';
+    }).catch(function (err) { msg.className = 'erro'; msg.textContent = err.message; })
+      .then(function () { btn.disabled = false; });
+  });
+
+  $('#form-cliente').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var id = $('#cliente-id').value.trim(), btn = $('button[type="submit"]', e.target), msg = $('#cliente-msg');
+    if (!/^[0-9]+-[0-9a-z]+\.apps\.googleusercontent\.com$/.test(id)) { msg.className = 'erro'; msg.textContent = 'O ID do cliente termina com ".apps.googleusercontent.com".'; return; }
+    btn.disabled = true; msg.className = ''; msg.textContent = 'Salvando…';
+    salvarConfigGoogle(function (j) { j.clientId = id; }).then(function () {
+      estado.clientIdGoogle = id; atualizarConfigGoogle();
+      $('#cliente-id').value = '';
+      msg.textContent = 'ID salvo. O botão "Entrar com Google" já aparece no topo.';
     }).catch(function (err) { msg.className = 'erro'; msg.textContent = err.message; })
       .then(function () { btn.disabled = false; });
   });

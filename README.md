@@ -12,6 +12,16 @@ Ela funciona sozinha. A colaboradora **cola o link da planilha do Google** (ou e
 - A leitura usa a API oficial do Google Sheets, com uma chave de API cadastrada em **Configurações**. A chave é gratuita, é feita uma única vez e fica restrita a este site e à Google Sheets API. Os passos estão na própria tela.
 - A plataforma lê o nome da planilha (de onde tira o mês), todas as abas e os valores exatos.
 
+### Atualizar a própria planilha do Google ("Entrar com Google")
+
+Com o botão **Entrar com Google** (no topo), a plataforma usa a conta de quem entrou. Assim a planilha não precisa ficar aberta para qualquer pessoa, e a plataforma pode **atualizar a planilha no mesmo link**:
+
+- **Faturas Pendentes:** pinta a aba *Semana N* da conferência. Azul para quem tem fatura do mês, branco para quem não tem. As cores alternadas antigas daquela aba são removidas, e as outras semanas não são tocadas.
+- **Contratos sem Faturas:** cria (ou recria) a aba *Contratos sem Fatura – Semana N* na própria planilha, só com os clientes com contrato e sem fatura.
+- Antes de alterar, a plataforma guarda uma **cópia em Excel** de como a planilha estava (*Baixar enviada*), além do Excel gerado.
+
+A configuração é feita uma vez, em **Configurações → ID do cliente**: um cliente OAuth do tipo *Aplicativo da Web* no projeto *WattWise Plataforma*, com a origem `https://danielamotaxp-code.github.io`.
+
 | Aba | O que recebe | O que gera |
 |---|---|---|
 | **Faturas Pendentes** | Arquivo da planilha mensal de faturas (ex.: *Clientes Não Faturados – OUT 2026.xlsx*), com abas *Semana 1*, *Semana 2*… | **Faturas Pendentes – Outubro 2026 – Semana N.xlsx**, com todas as semanas. Instalações com fatura do mês ficam com todas as linhas em **azul** e as que ainda não têm ficam em **branco**. Inclui as abas *Resumo* e *Pendentes – Semana N*. |

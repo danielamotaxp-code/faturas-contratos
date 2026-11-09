@@ -158,3 +158,6 @@ td.quebra { white-space: normal; min-width: 220px; }
 .passos { margin-top: 14px; color: var(--texto-2); font-size: .92rem; line-height: 1.6; }
 .passos summary { cursor: pointer; font-weight: 600; color: var(--azul); }
 .passos code { background: #f1f4f8; padding: 1px 5px; border-radius: 4px; }
+.btn-google { border-color: var(--azul-medio); color: var(--azul); }
+.btn-google.conectado { background: #e7f4ec; border-color: #9cd3b0; color: #1d5a37; }
+.aviso-google { color: #8a5300; }

@@ -45,7 +45,7 @@
   <div id="tela-app" hidden>
     <header class="topo">
       <div class="marca"><span class="marca-logo">W</span><div><strong>WattWise</strong><small>Faturas e Contratos</small></div></div>
-      <div class="usuario"><span id="nome-usuario"></span><button id="btn-config" class="btn btn-link">Configurações</button><button id="btn-sair" class="btn btn-link">Sair</button></div>
+      <div class="usuario"><button id="btn-google" class="btn btn-peq btn-google" hidden>Entrar com Google</button><span id="nome-usuario"></span><button id="btn-config" class="btn btn-link">Configurações</button><button id="btn-sair" class="btn btn-link">Sair</button></div>
     </header>
 
     <nav class="abas" role="tablist">
@@ -80,6 +80,15 @@
             </ol>
           </details>
         </div>
+        <div class="card">
+          <div class="card-titulo"><span class="selo">G</span><h2>Atualizar a planilha do Google no mesmo link</h2></div>
+          <p class="ajuda">Com o <b>"Entrar com Google"</b>, a plataforma lê a planilha com a conta de quem entrou (a planilha não precisa ficar aberta para qualquer pessoa) e <b>atualiza a própria planilha</b>: pinta a aba "Semana N" em Faturas Pendentes e cria a aba "Contratos sem Fatura – Semana N" em Contratos sem Faturas. Antes, a plataforma guarda uma cópia em Excel de como a planilha estava. Situação: <span id="cliente-situacao"></span></p>
+          <form id="form-cliente" class="envio">
+            <input id="cliente-id" class="campo" type="text" placeholder="ID do cliente (termina com .apps.googleusercontent.com)" autocomplete="off" aria-label="ID do cliente OAuth">
+            <button class="btn btn-primario" type="submit">Salvar ID</button>
+          </form>
+          <p id="cliente-msg" class="dica"></p>
+        </div>
       </section>
 
       <!-- ABA 3 -->
@@ -112,6 +121,7 @@
   <script src="assets/planilhas.js"></script>
   <script src="assets/armazenamento.js"></script>
   <script src="assets/google.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="assets/app.js"></script>
 </body>
 </html>
