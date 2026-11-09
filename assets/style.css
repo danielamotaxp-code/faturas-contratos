@@ -150,3 +150,11 @@ td.quebra { white-space: normal; min-width: 220px; }
 .btn-perigo { color: var(--vermelho); }
 .btn-perigo:hover { border-color: var(--vermelho); }
 .btn-perigo.confirmar { background: var(--vermelho); color: #fff; border-color: var(--vermelho); }
+
+/* modo de envio e configurações */
+.modo { margin-bottom: 12px; }
+.campo-link { flex: 1 1 420px; }
+.alvo { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--azul-claro); color: var(--azul-escuro); font-size: .9rem; }
+.passos { margin-top: 14px; color: var(--texto-2); font-size: .92rem; line-height: 1.6; }
+.passos summary { cursor: pointer; font-weight: 600; color: var(--azul); }
+.passos code { background: #f1f4f8; padding: 1px 5px; border-radius: 4px; }

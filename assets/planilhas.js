@@ -137,16 +137,31 @@
     return { nomeGerado: 'Contratos sem Faturas – ' + mes.rotulo + ' – Semana ' + ult.n, bytes: gravar(out), semanas: resultado };
   }
 
-  /** Processa o arquivo enviado. */
-  function processar(aba, nomeArquivo, buffer, semanaManual) {
-    var mes = R.mesDoNome(nomeArquivo);
-    if (!mes) throw new Error('Não identifiquei o mês no nome do arquivo "' + nomeArquivo + '". O nome precisa ter o mês e o ano, por exemplo "OUT 2026".');
-    var wb = lerArquivo(nomeArquivo, buffer);
+  /** Processa uma planilha já aberta. "nome" é o nome do arquivo ou o título da planilha do Google (de onde sai o mês). */
+  function processarLivro(aba, nome, wb, semanaManual) {
+    var mes = R.mesDoNome(nome);
+    if (!mes) throw new Error('Não identifiquei o mês no nome "' + nome + '". O nome da planilha precisa ter o mês e o ano, por exemplo "OUT 2026".');
     var r = aba === 'faturas' ? gerarFaturas(wb, mes, semanaManual) : gerarContratos(wb, mes, semanaManual);
     r.mes = mes;
     return r;
   }
 
-  var api = { processar: processar, lerArquivo: lerArquivo, dadosDaAba: dadosDaAba };
+  /** Processa o arquivo enviado. */
+  function processar(aba, nomeArquivo, buffer, semanaManual) {
+    return processarLivro(aba, nomeArquivo, lerArquivo(nomeArquivo, buffer), semanaManual);
+  }
+
+  /** Monta uma planilha a partir das abas lidas do Google (cópia fiel, guardada como "planilha enviada"). */
+  function livroDeAbas(nomes, abas) {
+    var wb = X.utils.book_new();
+    nomes.forEach(function (n) {
+      var ws = X.utils.aoa_to_sheet(abas[n] && abas[n].length ? abas[n] : [[]]);
+      X.utils.book_append_sheet(wb, ws, n.slice(0, 31));
+    });
+    return wb;
+  }
+
+  var api = { processar: processar, processarLivro: processarLivro, livroDeAbas: livroDeAbas, gravar: gravar,
+    lerArquivo: lerArquivo, dadosDaAba: dadosDaAba };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Planilhas = api;
 })(this);

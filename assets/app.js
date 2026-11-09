@@ -4,19 +4,19 @@
   var A = window.Armazenamento, R = window.Regras, P = window.Planilhas;
   var USUARIOS_PADRAO = [['daniela', 'Daniela'], ['paula', 'Paula'], ['ytala', 'Ytala']];
   var ARQ_INDICE = 'dados/indice.json', ARQ_HIST = 'dados/historico.json', ARQ_CLIENTES = 'dados/clientes.json';
-  var estado = { repo: null, nome: '', cofre: null, registros: [], progresso: null, progAba: 'faturas', progPeriodo: 'semanal' };
+  var estado = { chaveGoogle: '', modo: { faturas: 'link', contratos: 'link' }, alvo: {}, repo: null, nome: '', cofre: null, registros: [], progresso: null, progAba: 'faturas', progPeriodo: 'semanal' };
 
   var TEXTOS = {
     faturas: {
       selo: '1',
       titulo: 'Faturas Pendentes',
-      ajuda: 'Envie a planilha de faturas do mês (ex.: <b>Clientes Não Faturados – OUT 2026.xlsx</b>). O mês é lido do <b>nome do arquivo</b> e cada aba <b>Semana N</b> é conferida. A plataforma gera uma planilha nova com todas as semanas: clientes com fatura do mês ficam em <b>azul</b> (todas as linhas) e os que ainda não têm ficam em <b>branco</b>.',
+      ajuda: 'Cole o link da planilha de faturas do mês no Google (ex.: <b>Clientes Não Faturados – OUT 2026</b>) ou envie o arquivo. O mês é lido do <b>nome da planilha</b> e cada aba <b>Semana N</b> é conferida. A plataforma gera uma planilha nova com todas as semanas: clientes com fatura do mês ficam em <b>azul</b> (todas as linhas) e os que ainda não têm ficam em <b>branco</b>.',
       rotTotal: 'instalações', rotCom: 'com fatura do mês', rotSem: 'sem fatura (gerar)'
     },
     contratos: {
       selo: '2',
       titulo: 'Contratos sem Faturas',
-      ajuda: 'Envie a planilha com as abas <b>Contratos – Semana N</b> e <b>Faturas – Semana N</b> (gateway de pagamento), ex.: <b>Contratos e Faturas – OUT 2026.xlsx</b>. A plataforma compara as duas pela instalação e gera uma planilha nova só com os clientes que têm contrato com a WattWise e não têm fatura gerada.',
+      ajuda: 'Cole o link da planilha do Google (ou envie o arquivo) com as abas <b>Contratos – Semana N</b> e <b>Faturas – Semana N</b> (gateway de pagamento), ex.: <b>Contratos e Faturas – OUT 2026</b>. A plataforma compara as duas pela instalação e gera uma planilha nova só com os clientes que têm contrato com a WattWise e não têm fatura gerada.',
       rotTotal: 'contratos', rotCom: 'com fatura', rotSem: 'sem fatura'
     }
   };
@@ -172,13 +172,18 @@
       '<div class="card">' +
         '<div class="card-titulo"><span class="selo">' + t.selo + '</span><h2>' + t.titulo + '</h2></div>' +
         '<p class="ajuda">' + t.ajuda + '</p>' +
+        '<div class="segmentado modo"><button type="button" data-modo="link" class="ativo">Link do Google Planilhas</button>' +
+          '<button type="button" data-modo="arquivo">Arquivo (.xlsx)</button></div>' +
         '<form class="envio">' +
-          '<label class="arquivo"><input type="file" required accept=".xlsx,.xls,.xlsm,.ods,.csv">' +
+          '<input class="campo campo-link" type="url" placeholder="Cole o link da planilha do Google (https://docs.google.com/spreadsheets/d/...)" aria-label="Link da planilha do Google">' +
+          '<label class="arquivo" hidden><input type="file" accept=".xlsx,.xls,.xlsm,.ods,.csv">' +
             '<span class="arquivo-texto">' + SEM_ARQUIVO + '</span></label>' +
           '<label class="semana">Semana <select class="campo">' + opcoes + '</select></label>' +
           '<button class="btn btn-primario" type="submit">Gerar planilha</button>' +
         '</form>' +
-        '<p class="dica">No Google Planilhas: <b>Arquivo → Fazer download → Microsoft Excel (.xlsx)</b>. Assim todas as abas vão juntas.</p>' +
+        '<p class="dica dica-link">A planilha precisa estar em <b>Compartilhar → Acesso geral → Qualquer pessoa com o link (Leitor)</b>. O mês é lido do nome da planilha.</p>' +
+        '<p class="dica dica-arquivo" hidden>No Google Planilhas: <b>Arquivo → Fazer download → Microsoft Excel (.xlsx)</b>. Assim todas as abas vão juntas.</p>' +
+        '<p class="alvo" hidden></p>' +
         '<div class="status" hidden></div>' +
       '</div>' +
       '<div class="card">' +
@@ -187,7 +192,6 @@
           '<div><button class="btn btn-peq" data-acao="atualizar">Atualizar lista</button> <span class="atualizado"></span></div>' +
         '</div>' +
         '<div class="lista"><p class="vazio">Carregando…</p></div>' +
-        '<input type="file" class="inserir-arquivo" accept=".xlsx,.xls,.xlsm,.ods,.csv" hidden>' +
       '</div>';
 
     var input = $('form input[type="file"]', el), rotulo = $('.arquivo-texto', el), caixa = $('.arquivo', el);
@@ -198,28 +202,32 @@
     ['dragover', 'dragenter'].forEach(function (ev) { caixa.addEventListener(ev, function () { caixa.classList.add('arrastando'); }); });
     ['dragleave', 'drop'].forEach(function (ev) { caixa.addEventListener(ev, function () { caixa.classList.remove('arrastando'); }); });
 
-    $('form', el).addEventListener('submit', function (e) {
-      e.preventDefault();
-      if (!input.files[0]) return;
-      var btn = $('button', e.target);
-      btn.disabled = true;
-      enviarArquivo(aba, input.files[0], $('select', e.target).value).then(function (ok) {
-        if (ok) { e.target.reset(); rotulo.textContent = SEM_ARQUIVO; caixa.classList.remove('escolhido'); }
-      }).then(function () { btn.disabled = false; });
+    $$('.modo button', el).forEach(function (b) {
+      b.addEventListener('click', function () {
+        estado.modo[aba] = b.dataset.modo;
+        $$('.modo button', el).forEach(function (x) { x.classList.toggle('ativo', x === b); });
+        var link = b.dataset.modo === 'link';
+        $('.campo-link', el).hidden = !link; caixa.hidden = link;
+        $('.dica-link', el).hidden = !link; $('.dica-arquivo', el).hidden = link;
+      });
     });
 
-    // "Inserir planilha" de uma semana da lista
-    var inserir = $('.inserir-arquivo', el);
-    inserir.addEventListener('change', function () {
-      var arq = inserir.files[0], semana = inserir.dataset.semana, mes = inserir.dataset.mes;
-      inserir.value = '';
-      if (!arq) return;
-      var m = R.mesDoNome(arq.name);
-      if (m && mes && m.chave !== mes) {
-        mostrarStatus(aba, 'falha', 'O arquivo "' + arq.name + '" é de ' + m.rotulo + ', mas você escolheu inserir em ' + R.rotuloMes(mes) + '.');
+    $('form', el).addEventListener('submit', function (e) {
+      e.preventDefault();
+      var porLink = estado.modo[aba] === 'link', link = $('.campo-link', el).value.trim();
+      if (porLink ? !link : !input.files[0]) {
+        mostrarStatus(aba, 'falha', porLink ? 'Cole o link da planilha do Google.' : 'Escolha o arquivo da planilha.');
         return;
       }
-      enviarArquivo(aba, arq, semana);
+      var btn = $('button[type="submit"]', e.target);
+      btn.disabled = true;
+      var semana = $('select', e.target).value;
+      (porLink ? enviarLink(aba, link, semana) : enviarArquivo(aba, input.files[0], semana)).then(function (ok) {
+        if (ok) {
+          e.target.reset(); rotulo.textContent = SEM_ARQUIVO; caixa.classList.remove('escolhido');
+          estado.alvo[aba] = null; $('.alvo', el).hidden = true;
+        }
+      }).then(function () { btn.disabled = false; });
     });
 
     $('[data-acao="atualizar"]', el).addEventListener('click', carregarLista);
@@ -233,19 +241,53 @@
     return st;
   }
 
-  /** Lê, confere, gera e salva. Devolve true se deu certo. */
+  function passoDe(aba) {
+    return function (txt) { mostrarStatus(aba, 'processando', '<span class="spinner"></span>' + esc(txt)); };
+  }
+
+  function conferirAlvo(aba, resultado) {
+    var alvo = estado.alvo[aba];
+    if (alvo && alvo.mes && resultado.mes.chave !== alvo.mes) {
+      throw new Error('Essa planilha é de ' + resultado.mes.rotulo + ', mas você escolheu inserir em ' + R.rotuloMes(alvo.mes) + '. Confira o nome da planilha.');
+    }
+  }
+
+  /** Lê o arquivo, confere, gera e salva. Devolve true se deu certo. */
   function enviarArquivo(aba, arq, semana) {
-    var t = TEXTOS[aba], resultado;
-    var passo = function (txt) { mostrarStatus(aba, 'processando', '<span class="spinner"></span>' + esc(txt)); };
+    var passo = passoDe(aba), resultado;
     passo('Lendo e conferindo "' + arq.name + '"…');
-    return arq.arrayBuffer().then(function (buf) {
+    return concluir(aba, arq.arrayBuffer().then(function (buf) {
       return esperarTela().then(function () {
         resultado = P.processar(aba, arq.name, buf, semana);
+        conferirAlvo(aba, resultado);
         resultado.original = new Uint8Array(buf);
         passo('Salvando a planilha enviada e a gerada…');
-        return salvarProcessamento(aba, arq.name, resultado, passo);
+        return salvarProcessamento(aba, arq.name, resultado, passo, '').then(function (reg) { return [reg, resultado]; });
       });
-    }).then(function (reg) {
+    }));
+  }
+
+  /** Lê a planilha pelo link do Google, confere, gera e salva. */
+  function enviarLink(aba, link, semana) {
+    var passo = passoDe(aba), resultado;
+    passo('Lendo a planilha no Google Planilhas…');
+    return concluir(aba, window.Google.lerPlanilha(link, estado.chaveGoogle).then(function (g) {
+      passo('Conferindo "' + g.titulo + '"…');
+      return esperarTela().then(function () {
+        var wb = P.livroDeAbas(g.nomesAbas, g.abas);
+        resultado = P.processarLivro(aba, g.titulo, wb, semana);
+        conferirAlvo(aba, resultado);
+        resultado.original = P.gravar(wb);
+        passo('Salvando a cópia da planilha enviada e a gerada…');
+        return salvarProcessamento(aba, g.titulo + '.xlsx', resultado, passo, g.link).then(function (reg) { return [reg, resultado]; });
+      });
+    }));
+  }
+
+  function concluir(aba, promessa) {
+    var t = TEXTOS[aba], resultado;
+    return promessa.then(function (par) {
+      var reg = par[0]; resultado = par[1];
       var st = mostrarStatus(aba, 'ok', '<b>' + esc(reg.nomeGerado) + '</b> gerada. Semana ' + esc(reg.semana) + ': ' +
         num(reg.semFatura) + ' ' + t.rotSem + ' de ' + num(reg.total) + ' ' + t.rotTotal + '. ' +
         '<button class="btn btn-peq btn-primario" type="button">Baixar planilha gerada</button>');
@@ -260,7 +302,7 @@
   }
 
   /** Grava no repositório privado: arquivo enviado, arquivo gerado, histórico, clientes e índice. */
-  function salvarProcessamento(aba, nomeArquivo, r, passo) {
+  function salvarProcessamento(aba, nomeArquivo, r, passo, linkOrigem) {
     var repo = estado.repo, agora = new Date(), id = carimbo(agora);
     var pasta = 'dados/arquivos/' + r.mes.chave + '/';
     var ext = (/\.[a-z0-9]+$/i.exec(nomeArquivo) || ['.xlsx'])[0].toLowerCase();
@@ -270,7 +312,7 @@
     var registro = {
       id: id, criadoEm: agora.toISOString(), usuario: estado.nome, aba: aba, mes: r.mes.chave, mesRotulo: r.mes.rotulo,
       semana: ult.n, semanas: r.semanas.map(function (s) { return s.n; }).join(', '),
-      nomeOrigem: nomeArquivo, caminhoOrigem: caminhoOrigem, nomeGerado: r.nomeGerado, caminhoGerado: caminhoGerado,
+      nomeOrigem: nomeArquivo, caminhoOrigem: caminhoOrigem, linkOrigem: linkOrigem || '', nomeGerado: r.nomeGerado, caminhoGerado: caminhoGerado,
       total: ult.total, comFatura: ult.comFatura, semFatura: ult.pendentes.length
     };
     var msg = r.nomeGerado + ' (' + estado.nome + ')';
@@ -361,6 +403,7 @@
         '<span><b>' + num(r.comFatura) + '</b> ' + t.rotCom + '</span>' +
         '<span><b>' + num(r.semFatura) + '</b> ' + t.rotSem + '</span></div>' +
       '</div><div class="item-botoes">' +
+      (r.linkOrigem ? '<a class="btn btn-peq" href="' + esc(r.linkOrigem) + '" target="_blank" rel="noopener">Abrir no Google</a>' : '') +
       '<button class="btn btn-peq" data-baixar="' + esc(r.caminhoOrigem) + '" data-nome="' + esc(r.nomeOrigem) + '">Baixar enviada</button>' +
       '<button class="btn btn-peq btn-primario" data-baixar="' + esc(r.caminhoGerado) + '" data-nome="' + esc(r.nomeGerado + '.xlsx') + '">Baixar gerada</button>' +
       '<button class="btn btn-peq btn-perigo" data-excluir="' + esc(r.id) + '">Excluir</button>' +
@@ -409,10 +452,17 @@
 
     $$('[data-inserir]', el).forEach(function (b) {
       b.addEventListener('click', function () {
-        var inp = $('[data-painel="' + aba + '"] .inserir-arquivo');
-        inp.dataset.semana = b.dataset.inserir;
-        inp.dataset.mes = b.dataset.mes;
-        inp.click();
+        var painel = $('[data-painel="' + aba + '"]');
+        estado.alvo[aba] = { mes: b.dataset.mes, semana: b.dataset.inserir };
+        $('form select', painel).value = b.dataset.inserir;
+        var alvo = $('.alvo', painel);
+        alvo.hidden = false;
+        alvo.innerHTML = 'Inserindo na <b>Semana ' + esc(b.dataset.inserir) + '</b> de <b>' + esc(rotuloMes(b.dataset.mes)) +
+          '</b>. Cole o link ou escolha o arquivo e clique em Gerar planilha. <button type="button" class="btn btn-link">Cancelar</button>';
+        $('button', alvo).addEventListener('click', function () { estado.alvo[aba] = null; alvo.hidden = true; $('form select', painel).value = ''; });
+        $('.card', painel).scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var campo = estado.modo[aba] === 'link' ? $('.campo-link', painel) : null;
+        if (campo) setTimeout(function () { campo.focus(); }, 300);
       });
     });
 
@@ -634,7 +684,41 @@
       }));
   }
 
+  /* ---------- configurações (chave do Google) ---------- */
+  function carregarChaveGoogle() {
+    return fetch('assets/google.json?v=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (j) { estado.chaveGoogle = j.chave || ''; atualizarConfigGoogle(); })
+      .catch(function () { /* sem chave ainda */ });
+  }
+  function atualizarConfigGoogle() {
+    var s = $('#google-situacao');
+    if (s) s.innerHTML = estado.chaveGoogle ? '<span class="tag tag-ok">Configurada</span>' : '<span class="tag tag-pendente">Ainda não configurada</span>';
+  }
+  $('#btn-config').addEventListener('click', function () {
+    $$('.abas button').forEach(function (x) { x.classList.remove('ativa'); });
+    $$('.painel').forEach(function (p) { p.hidden = p.dataset.painel !== 'config'; });
+    atualizarConfigGoogle();
+  });
+  $('#form-google').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var chave = $('#google-chave').value.trim(), btn = $('button[type="submit"]', e.target), msg = $('#google-msg');
+    if (!/^AIza[0-9A-Za-z_-]{30,}$/.test(chave)) { msg.className = 'erro'; msg.textContent = 'A chave do Google começa com "AIza" e tem cerca de 39 caracteres.'; return; }
+    btn.disabled = true; msg.className = ''; msg.textContent = 'Salvando…';
+    var site = new A.Repositorio(estado.repo.token, A.REPO_SITE);
+    site.info('assets/google.json').then(function (meta) {
+      return site.gravarBytes('assets/google.json', new TextEncoder().encode(JSON.stringify({ chave: chave }, null, 2)),
+        'Chave do Google Planilhas atualizada', meta && meta.sha);
+    }).then(function () {
+      estado.chaveGoogle = chave; atualizarConfigGoogle();
+      $('#google-chave').value = '';
+      msg.textContent = 'Chave salva. Já dá para enviar planilhas pelo link (para as demais usuárias, em cerca de 1 minuto).';
+    }).catch(function (err) { msg.className = 'erro'; msg.textContent = err.message; })
+      .then(function () { btn.disabled = false; });
+  });
+
   /* ---------- início ---------- */
+  carregarChaveGoogle();
   montarPainel('faturas');
   montarPainel('contratos');
   var tk = ler('ww_token');

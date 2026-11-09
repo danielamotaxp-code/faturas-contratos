@@ -4,7 +4,13 @@ Plataforma interna da WattWise para conferir, toda semana, quais clientes estão
 
 Site: https://danielamotaxp-code.github.io/faturas-contratos/
 
-Ela funciona sozinha. A colaboradora envia o arquivo da planilha, a plataforma confere e gera a planilha nova na hora, dentro do próprio navegador. As duas ficam guardadas para consultas e downloads futuros.
+Ela funciona sozinha. A colaboradora **cola o link da planilha do Google** (ou envia o arquivo .xlsx), e a plataforma confere e gera a planilha nova na hora, dentro do próprio navegador. A planilha enviada, guardada como uma cópia daquele momento, e a gerada ficam salvas para consultas e downloads futuros.
+
+### Envio pelo link do Google
+
+- A planilha precisa estar em **Compartilhar → Acesso geral → Qualquer pessoa com o link (Leitor)**.
+- A leitura usa a API oficial do Google Sheets, com uma chave de API cadastrada em **Configurações**. A chave é gratuita, é feita uma única vez e fica restrita a este site e à Google Sheets API. Os passos estão na própria tela.
+- A plataforma lê o nome da planilha (de onde tira o mês), todas as abas e os valores exatos.
 
 | Aba | O que recebe | O que gera |
 |---|---|---|

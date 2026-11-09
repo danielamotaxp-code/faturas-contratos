@@ -45,7 +45,7 @@
   <div id="tela-app" hidden>
     <header class="topo">
       <div class="marca"><span class="marca-logo">W</span><div><strong>WattWise</strong><small>Faturas e Contratos</small></div></div>
-      <div class="usuario"><span id="nome-usuario"></span><button id="btn-sair" class="btn btn-link">Sair</button></div>
+      <div class="usuario"><span id="nome-usuario"></span><button id="btn-config" class="btn btn-link">Configurações</button><button id="btn-sair" class="btn btn-link">Sair</button></div>
     </header>
 
     <nav class="abas" role="tablist">
@@ -58,6 +58,29 @@
       <!-- ABA 1 e ABA 2 usam o mesmo molde -->
       <section class="painel" data-painel="faturas"></section>
       <section class="painel" data-painel="contratos" hidden></section>
+
+      <!-- Configurações -->
+      <section class="painel" data-painel="config" hidden>
+        <div class="card">
+          <div class="card-titulo"><span class="selo">G</span><h2>Leitura de planilhas pelo link do Google</h2></div>
+          <p class="ajuda">Para gerar a partir do link, a plataforma usa uma <b>chave de API do Google</b> (feita uma vez, gratuita). Situação: <span id="google-situacao"></span></p>
+          <form id="form-google" class="envio">
+            <input id="google-chave" class="campo" type="password" placeholder="Cole a chave (começa com AIza...)" autocomplete="off" aria-label="Chave de API do Google">
+            <button class="btn btn-primario" type="submit">Salvar chave</button>
+          </form>
+          <p id="google-msg" class="dica"></p>
+          <details class="passos">
+            <summary>Como criar a chave (uma vez só)</summary>
+            <ol>
+              <li>Abra <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">console.cloud.google.com/projectcreate</a>, dê o nome <b>WattWise Plataforma</b> e clique em <b>Criar</b>.</li>
+              <li>Abra <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">a página da Google Sheets API</a>, confira se o projeto WattWise Plataforma está selecionado no topo e clique em <b>Ativar</b>.</li>
+              <li>Abra <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credenciais</a> → <b>Criar credenciais</b> → <b>Chave de API</b>. Copie a chave que aparecer.</li>
+              <li>Clique em <b>Editar chave de API</b> (ou no nome da chave). Em <b>Restrições de aplicativos</b>, escolha <b>Sites</b> e adicione <code>https://danielamotaxp-code.github.io/*</code>. Em <b>Restrições de API</b>, escolha <b>Restringir chave</b> e marque <b>Google Sheets API</b>. Clique em <b>Salvar</b>.</li>
+              <li>Cole a chave acima e clique em <b>Salvar chave</b>.</li>
+            </ol>
+          </details>
+        </div>
+      </section>
 
       <!-- ABA 3 -->
       <section class="painel" data-painel="progresso" hidden>
@@ -88,6 +111,7 @@
   <script src="assets/regras.js"></script>
   <script src="assets/planilhas.js"></script>
   <script src="assets/armazenamento.js"></script>
+  <script src="assets/google.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>
