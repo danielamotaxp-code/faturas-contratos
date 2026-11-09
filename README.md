@@ -1,37 +1,53 @@
 # WattWise · Faturas e Contratos
 
-Plataforma interna da WattWise para conferir, toda semana, quais clientes estão sem fatura gerada. Ela funciona sozinha: os colaboradores colam o link da planilha e a plataforma gera a planilha conferida na hora.
+Plataforma interna da WattWise para conferir, toda semana, quais clientes estão sem fatura gerada.
+
+Site: https://danielamotaxp-code.github.io/faturas-contratos/
+
+Ela funciona sozinha. A colaboradora envia o arquivo da planilha, a plataforma confere e gera a planilha nova na hora, dentro do próprio navegador. As duas ficam guardadas para consultas e downloads futuros.
 
 | Aba | O que recebe | O que gera |
 |---|---|---|
-| **Faturas Pendentes** | Link da planilha mensal de faturas (ex.: *Clientes Não Faturados – OUT 2026*), com abas *Semana 1*, *Semana 2*… | Planilha **Faturas Pendentes – Outubro 2026 – Semana N** com todas as semanas. Instalações com fatura do mês ficam com todas as linhas em **azul**, e as que ainda não têm ficam em **branco**. Inclui as abas *Resumo* e *Pendentes – Semana N*. |
-| **Contratos sem Faturas** | Link da planilha com *Contratos – Semana N* e *Faturas – Semana N* (gateway) | Planilha **Contratos sem Faturas – Outubro 2026 – Semana N**, só com os contratos vinculados que não têm fatura, uma aba por semana, mais a aba *Resumo*. |
-| **Progresso** | Histórico de todas as conferências | Números por semana e por mês: sem fatura, resolvidos, novos, que continuam e cobertura. Também traz a lista de clientes recorrentes sem fatura, que pode ser baixada. |
+| **Faturas Pendentes** | Arquivo da planilha mensal de faturas (ex.: *Clientes Não Faturados – OUT 2026.xlsx*), com abas *Semana 1*, *Semana 2*… | **Faturas Pendentes – Outubro 2026 – Semana N.xlsx**, com todas as semanas. Instalações com fatura do mês ficam com todas as linhas em **azul** e as que ainda não têm ficam em **branco**. Inclui as abas *Resumo* e *Pendentes – Semana N*. |
+| **Contratos sem Faturas** | Arquivo com as abas *Contratos – Semana N* e *Faturas – Semana N* (gateway) | **Contratos sem Faturas – Outubro 2026 – Semana N.xlsx**, só com os contratos vinculados que não têm fatura. Tem uma aba por semana e a aba *Resumo*. |
+| **Progresso** | Histórico de todas as conferências | Números por semana e por mês (sem fatura, resolvidos, novos, que continuam e cobertura) e a lista de clientes recorrentes sem fatura, que pode ser baixada. |
 
 ## Regras
 
-- **O mês vem do nome da planilha.** O nome precisa ter o mês e o ano, por exemplo *OUT 2026*.
+- **O mês vem do nome do arquivo.** O nome precisa ter o mês e o ano, por exemplo *OUT 2026*.
 - **O cliente é identificado pela instalação** (*Instalação* / *Número instalação*).
 - **Fatura com status *Cancelado* conta como fatura gerada.**
-- Cada envio gera uma **planilha nova**. A planilha da semana anterior continua salva e com as cores dela.
-- Os links da planilha enviada e da planilha gerada ficam salvos na plataforma, organizados por mês.
+- Cada envio gera uma **planilha nova**. As anteriores continuam guardadas, com as cores delas.
+- No Google Planilhas, baixe o arquivo em **Arquivo → Fazer download → Microsoft Excel (.xlsx)**, para que todas as abas venham juntas.
 
-## Como funciona
+## Onde fica cada coisa
 
-- **Site** (esta pasta, publicado pelo GitHub Pages): `index.html` e `assets/`. Não guarda nenhum dado de cliente.
-- **Motor** (`apps-script/`): roda no Google Apps Script da conta dona das planilhas. Ele lê as planilhas, gera as novas no Google Drive (pasta *WattWise – Faturas e Contratos*) e guarda o histórico numa planilha-banco.
-- **Logins**: ficam no arquivo `Config.gs`, que está no repositório **privado** `faturas-contratos-acessos`. Esse arquivo nunca entra aqui.
+| Repositório | Visibilidade | Conteúdo |
+|---|---|---|
+| `faturas-contratos` | público | O site (`index.html`, `assets/`) e o `assets/cofre.json`, que tem só o token **criptografado**. Não guarda nenhum dado de cliente. |
+| `faturas-contratos-acessos` | **privado** | Os dados, na pasta `dados/`: planilhas enviadas e geradas (`dados/arquivos/AAAA-MM/`), lista de planilhas (`indice.json`), histórico do progresso (`historico.json`) e cadastro dos clientes pendentes (`clientes.json`). |
 
-## Instalação (uma vez)
+### Arquivos do site
 
-1. Acesse <https://script.google.com>, crie um projeto e dê o nome **WattWise – Faturas e Contratos**.
-2. Cole o conteúdo de `apps-script/Codigo.gs` no arquivo `Código.gs`.
-3. Crie um arquivo de script chamado `Config` e cole nele o `Config.gs` do repositório privado.
-4. Em *Configurações do projeto*, marque **"Mostrar arquivo de manifesto appsscript.json"** e cole o conteúdo de `apps-script/appsscript.json`.
-5. Selecione a função `configurarPlataforma` e clique em **Executar**. Autorize o acesso ao Drive e ao Sheets. A pasta e a planilha-banco são criadas nesse momento.
-6. Clique em **Implantar → Nova implantação → App da Web**, com *Executar como: eu* e *Quem pode acessar: qualquer pessoa*. Copie a URL gerada.
-7. Cole a URL em `assets/config.js` (campo `API_URL`).
+- `assets/regras.js`: regras de conferência (cores, cruzamento, progresso).
+- `assets/planilhas.js`: lê o arquivo enviado e gera o .xlsx com as cores.
+- `assets/armazenamento.js`: grava e lê os arquivos no repositório privado e cuida do cofre de acesso.
+- `assets/app.js`: as telas.
+- `assets/vendor/`: biblioteca de planilhas [xlsx-js-style](https://github.com/gitbrent/xlsx-js-style), licença Apache 2.0.
 
-> Se o motor mudar, faça **Implantar → Gerenciar implantações → editar → Nova versão**. Assim a URL continua a mesma.
+## Acesso
 
-**Importante:** a conta que fez a implantação precisa ter acesso às planilhas cujos links forem colados na plataforma.
+O login tem as usuárias **Daniela**, **Paula** e **Ytala**, com uma senha da equipe.
+
+A senha abre o cofre (AES-256-GCM, com chave derivada por PBKDF2 em 600 mil iterações). Dentro dele está o token do GitHub que lê e grava no repositório privado.
+
+### Configuração inicial ou troca de senha
+
+1. No GitHub, acesse **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
+   - Em *Repository access*, escolha **Only select repositories** e marque `faturas-contratos` e `faturas-contratos-acessos`.
+   - Em *Permissions → Repository permissions → Contents*, escolha **Read and write**.
+   - Escolha a validade mais longa disponível.
+2. No site, clique em **Configurar acesso / trocar senha**. Cole o token e defina a senha da equipe: no mínimo 8 caracteres, com letras e números.
+3. A plataforma confere o token, criptografa e publica o cofre. Em cerca de 1 minuto, as demais usuárias já conseguem entrar.
+
+Quando o token vencer, repita esses passos. Os dados já guardados não são perdidos.

@@ -9,19 +9,35 @@
 <body>
   <!-- Login -->
   <section id="tela-login" class="login" hidden>
-    <form id="form-login" class="login-card" autocomplete="on">
+    <div class="login-card">
       <div class="marca"><span class="marca-logo">W</span><div><strong>WattWise</strong><small>Faturas e Contratos</small></div></div>
-      <label>Usuário
-        <select id="login-usuario" required>
-          <option value="">Selecione</option>
-          <option value="daniela">Daniela</option>
-          <option value="paula">Paula</option>
-          <option value="ytala">Ytala</option>
-        </select>
-      </label>
-      <label>Senha <input id="login-senha" type="password" required autocomplete="current-password"></label>
-      <button class="btn btn-primario" type="submit">Entrar</button>
+      <form id="form-login" autocomplete="on" hidden>
+        <label>Usuário <select id="login-usuario" required></select></label>
+        <label>Senha <input id="login-senha" type="password" required autocomplete="current-password"></label>
+        <button class="btn btn-primario" type="submit">Entrar</button>
+        <button class="btn btn-link" type="button" data-ir="config">Configurar acesso / trocar senha</button>
+      </form>
+      <div id="login-sem-config" hidden>
+        <p class="ajuda">A plataforma ainda não foi configurada. A configuração é feita uma única vez, pela administradora.</p>
+        <button class="btn btn-primario" type="button" data-ir="config">Configurar plataforma</button>
+      </div>
       <p id="login-erro" class="erro" role="alert"></p>
+    </div>
+  </section>
+
+  <!-- Configuração (uma vez, ou para trocar a senha) -->
+  <section id="tela-config" class="login" hidden>
+    <form id="form-config" class="login-card largo" autocomplete="off">
+      <div class="marca"><span class="marca-logo">W</span><div><strong>Configurar acesso</strong><small>Feito uma vez pela administradora</small></div></div>
+      <p class="ajuda">A plataforma guarda as planilhas no repositório privado <b>faturas-contratos-acessos</b>. Para isso ela usa um token do GitHub, que fica <b>criptografado com a senha de acesso</b>. Sem a senha, ninguém consegue usá-lo.</p>
+      <label>Token do GitHub (fine-grained, com acesso de leitura e gravação em <i>Contents</i> nos dois repositórios)
+        <input id="config-token" type="password" required placeholder="github_pat_..." autocomplete="off"></label>
+      <label>Senha de acesso da equipe (Daniela, Paula e Ytala)
+        <input id="config-senha" type="password" required autocomplete="new-password"></label>
+      <label>Repita a senha <input id="config-senha2" type="password" required autocomplete="new-password"></label>
+      <button class="btn btn-primario" type="submit">Salvar configuração</button>
+      <button class="btn btn-link" type="button" id="config-voltar">Voltar</button>
+      <p id="config-erro" class="erro" role="alert"></p>
     </form>
   </section>
 
@@ -66,7 +82,12 @@
   </div>
 
   <div id="tooltip" class="tooltip" hidden></div>
-  <script src="assets/config.js"></script>
+  <div id="aviso" class="aviso" role="status" hidden></div>
+  <script src="assets/vendor/cpexcel.js"></script>
+  <script src="assets/vendor/xlsx.bundle.js"></script>
+  <script src="assets/regras.js"></script>
+  <script src="assets/planilhas.js"></script>
+  <script src="assets/armazenamento.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>

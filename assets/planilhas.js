@@ -1,0 +1,134 @@
+/**
+ * Leitura das planilhas enviadas e geração das planilhas novas (.xlsx com cores),
+ * tudo dentro do navegador.
+ */
+(function (raiz) {
+  'use strict';
+  var R = raiz.Regras || require('./regras.js');
+  var X = raiz.XLSX || require('./vendor/xlsx.bundle.js');
+
+  var COR_CABECALHO = '1F4E79';
+  var BORDA = { style: 'thin', color: { rgb: 'D9DEE5' } };
+
+  /** Lê o arquivo enviado (.xlsx, .xls, .ods ou .csv). */
+  function lerArquivo(nome, buffer) {
+    if (/\.csv$/i.test(nome)) {
+      var txt = new TextDecoder('utf-8').decode(buffer);
+      var sep = (txt.split('\n')[0].match(/;/g) || []).length > (txt.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+      return X.read(txt, { type: 'string', raw: true, FS: sep });
+    }
+    return X.read(buffer, { type: 'array', cellDates: true });
+  }
+
+  function dadosDaAba(wb, nome) {
+    var ws = wb.Sheets[nome];
+    if (!ws || !ws['!ref']) return { cab: [], linhas: [] };
+    var aoa = X.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: false });
+    var cab = (aoa[0] || []).map(function (c) { return String(c == null ? '' : c).trim(); });
+    while (cab.length && !cab[cab.length - 1]) cab.pop();
+    var w = cab.length;
+    var linhas = aoa.slice(1).filter(function (l) {
+      return l.some(function (c) { return c !== '' && c != null && String(c).trim() !== ''; });
+    }).map(function (l) {
+      l = l.slice(0, w);
+      while (l.length < w) l.push('');
+      return l;
+    });
+    return { cab: cab, linhas: linhas };
+  }
+
+  function estiloCabecalho() {
+    return { fill: { patternType: 'solid', fgColor: { rgb: COR_CABECALHO } },
+      font: { bold: true, color: { rgb: 'FFFFFF' } }, alignment: { vertical: 'center' },
+      border: { top: BORDA, bottom: BORDA, left: BORDA, right: BORDA } };
+  }
+
+  function abaDeDados(cab, linhas, cores) {
+    var ws = X.utils.aoa_to_sheet([cab].concat(linhas), { cellDates: true });
+    var nLin = linhas.length + 1, nCol = cab.length;
+    for (var r = 0; r < nLin; r++) {
+      for (var c = 0; c < nCol; c++) {
+        var end = X.utils.encode_cell({ r: r, c: c });
+        var cel = ws[end];
+        if (!cel) { if (r === 0 || cores) { cel = ws[end] = { t: 's', v: '' }; } else continue; }
+        if (r === 0) { cel.s = estiloCabecalho(); continue; }
+        if (cel.t === 'd') cel.z = 'dd/mm/yyyy';
+        if (cel.t === 'n' && Number.isInteger(cel.v) && Math.abs(cel.v) >= 1e10) cel.z = '0';
+        if (cores) {
+          cel.s = { fill: { patternType: 'solid', fgColor: { rgb: cores[r - 1] } },
+            border: { top: BORDA, bottom: BORDA, left: BORDA, right: BORDA } };
+        }
+      }
+    }
+    ws['!ref'] = X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(nLin - 1, 0), c: Math.max(nCol - 1, 0) } });
+    ws['!autofilter'] = { ref: ws['!ref'] };
+    ws['!cols'] = cab.map(function (h) { return { wch: Math.min(38, Math.max(12, String(h).length + 3)) }; });
+    return ws;
+  }
+
+  function abaSimples(cab, linhas) {
+    var ws = X.utils.aoa_to_sheet([cab].concat(linhas));
+    cab.forEach(function (h, c) { ws[X.utils.encode_cell({ r: 0, c: c })].s = estiloCabecalho(); });
+    ws['!cols'] = cab.map(function (h, c) {
+      var max = String(h).length;
+      linhas.forEach(function (l) { max = Math.max(max, String(l[c] == null ? '' : l[c]).length); });
+      return { wch: Math.min(70, max + 2) };
+    });
+    return ws;
+  }
+
+  function gravar(wb) {
+    return new Uint8Array(X.write(wb, { bookType: 'xlsx', type: 'array', compression: true, cellDates: false }));
+  }
+
+  /** ABA 1: gera "Faturas Pendentes – <Mês> – Semana N". */
+  function gerarFaturas(wb, mes, semanaManual) {
+    var semanas = R.semanasFaturas(wb.SheetNames, semanaManual);
+    var abas = [], resultado = [];
+    semanas.forEach(function (s) {
+      var d = dadosDaAba(wb, s.aba);
+      var a = R.analisarFaturas(d.cab, d.linhas, mes.chave);
+      abas.push(['Semana ' + s.n, abaDeDados(d.cab, d.linhas, a.cores)]);
+      resultado.push({ n: s.n, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes });
+    });
+    var ult = resultado[resultado.length - 1];
+    var out = X.utils.book_new();
+    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Instalações', 'Com fatura de ' + mes.rotulo, 'Sem fatura (gerar)'],
+      resultado.map(function (s) { return ['Semana ' + s.n, s.total, s.comFatura, s.pendentes.length]; })), 'Resumo');
+    abas.forEach(function (a) { X.utils.book_append_sheet(out, a[1], a[0]); });
+    X.utils.book_append_sheet(out, abaSimples(['Instalação', 'Cliente', 'CPF/CNPJ', 'Detalhes'],
+      ult.pendentes.map(function (p) { return [p.instalacao, p.cliente, p.cpfCnpj, p.info]; })), 'Pendentes – Semana ' + ult.n);
+    return { nomeGerado: 'Faturas Pendentes – ' + mes.rotulo + ' – Semana ' + ult.n, bytes: gravar(out), semanas: resultado };
+  }
+
+  /** ABA 2: gera "Contratos sem Faturas – <Mês> – Semana N". */
+  function gerarContratos(wb, mes, semanaManual) {
+    var semanas = R.semanasContratos(wb.SheetNames, semanaManual);
+    var abas = [], resultado = [];
+    semanas.forEach(function (s) {
+      var c = dadosDaAba(wb, s.c), f = dadosDaAba(wb, s.f);
+      var a = R.analisarContratos(c.cab, c.linhas, f.cab, f.linhas);
+      abas.push(['Semana ' + s.n, abaDeDados(c.cab, a.indices.map(function (i) { return c.linhas[i]; }), null)]);
+      resultado.push({ n: s.n, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes });
+    });
+    var ult = resultado[resultado.length - 1];
+    var out = X.utils.book_new();
+    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Contratos vinculados', 'Com fatura gerada', 'Sem fatura'],
+      resultado.map(function (s) { return ['Semana ' + s.n, s.total, s.comFatura, s.pendentes.length]; })), 'Resumo');
+    abas.forEach(function (a) { X.utils.book_append_sheet(out, a[1], a[0]); });
+    return { nomeGerado: 'Contratos sem Faturas – ' + mes.rotulo + ' – Semana ' + ult.n, bytes: gravar(out), semanas: resultado };
+  }
+
+  /** Processa o arquivo enviado. */
+  function processar(aba, nomeArquivo, buffer, semanaManual) {
+    var mes = R.mesDoNome(nomeArquivo);
+    if (!mes) throw new Error('Não identifiquei o mês no nome do arquivo "' + nomeArquivo + '". O nome precisa ter o mês e o ano, por exemplo "OUT 2026".');
+    var wb = lerArquivo(nomeArquivo, buffer);
+    var r = aba === 'faturas' ? gerarFaturas(wb, mes, semanaManual) : gerarContratos(wb, mes, semanaManual);
+    r.mes = mes;
+    return r;
+  }
+
+  var api = { processar: processar, lerArquivo: lerArquivo, dadosDaAba: dadosDaAba };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Planilhas = api;
+})(this);

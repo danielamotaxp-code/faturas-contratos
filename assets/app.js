@@ -1,22 +1,22 @@
 (function () {
   'use strict';
 
-  var API = (window.WATTWISE_CONFIG || {}).API_URL || '';
-  var estado = { token: null, nome: '', registros: [], progresso: null, progAba: 'faturas', progPeriodo: 'semanal' };
+  var A = window.Armazenamento, R = window.Regras, P = window.Planilhas;
+  var USUARIOS_PADRAO = [['daniela', 'Daniela'], ['paula', 'Paula'], ['ytala', 'Ytala']];
+  var ARQ_INDICE = 'dados/indice.json', ARQ_HIST = 'dados/historico.json', ARQ_CLIENTES = 'dados/clientes.json';
+  var estado = { repo: null, nome: '', cofre: null, registros: [], progresso: null, progAba: 'faturas', progPeriodo: 'semanal' };
 
   var TEXTOS = {
     faturas: {
       selo: '1',
       titulo: 'Faturas Pendentes',
-      ajuda: 'Cole o link da planilha de faturas do mês (ex.: <b>Clientes Não Faturados – OUT 2026</b>). O mês é lido do <b>nome da planilha</b> e cada aba <b>Semana N</b> é conferida. A plataforma gera uma planilha nova com todas as semanas: clientes com fatura do mês ficam em <b>azul</b> (todas as linhas) e os que ainda não têm ficam em <b>branco</b>.',
-      gerado: 'Faturas Pendentes',
+      ajuda: 'Envie a planilha de faturas do mês (ex.: <b>Clientes Não Faturados – OUT 2026.xlsx</b>). O mês é lido do <b>nome do arquivo</b> e cada aba <b>Semana N</b> é conferida. A plataforma gera uma planilha nova com todas as semanas: clientes com fatura do mês ficam em <b>azul</b> (todas as linhas) e os que ainda não têm ficam em <b>branco</b>.',
       rotTotal: 'instalações', rotCom: 'com fatura do mês', rotSem: 'sem fatura (gerar)'
     },
     contratos: {
       selo: '2',
       titulo: 'Contratos sem Faturas',
-      ajuda: 'Cole o link da planilha com as abas <b>Contratos – Semana N</b> e <b>Faturas – Semana N</b> (gateway de pagamento). A plataforma compara as duas pela instalação e gera uma planilha nova só com os clientes que têm contrato com a WattWise e não têm fatura gerada.',
-      gerado: 'Contratos sem Faturas',
+      ajuda: 'Envie a planilha com as abas <b>Contratos – Semana N</b> e <b>Faturas – Semana N</b> (gateway de pagamento), ex.: <b>Contratos e Faturas – OUT 2026.xlsx</b>. A plataforma compara as duas pela instalação e gera uma planilha nova só com os clientes que têm contrato com a WattWise e não têm fatura gerada.',
       rotTotal: 'contratos', rotCom: 'com fatura', rotSem: 'sem fatura'
     }
   };
@@ -34,7 +34,7 @@
     var d = new Date(iso);
     return isNaN(d) ? '' : d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
-  var MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  var MESES = R.MESES_NOME;
   function rotuloMes(chave) { var p = String(chave).split('-'); return MESES[Number(p[1]) - 1] + ' de ' + p[0]; }
   function rotuloPeriodo(ch) {
     var m = /^(\d{4})-(\d{2})-S(\d+)$/.exec(ch || '');
@@ -42,49 +42,117 @@
   }
   function guardar(k, v) { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) { /* sem armazenamento */ } }
   function ler(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+  function arquivoSeguro(nome) {
+    return String(nome).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[–—]/g, '-')
+      .replace(/[^A-Za-z0-9 ._-]+/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function carimbo(d) {
+    var p = function (n) { return ('0' + n).slice(-2); };
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+  }
+  function baixarBytes(bytes, nome, tipo) {
+    var url = URL.createObjectURL(new Blob([bytes], { type: tipo || 'application/octet-stream' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+  var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  function esperarTela() { return new Promise(function (ok) { requestAnimationFrame(function () { setTimeout(ok, 30); }); }); }
 
-  function api(acao, dados) {
-    if (!API) return Promise.reject(new Error('A plataforma ainda não foi conectada ao motor (falta o endereço em assets/config.js).'));
-    var corpo = Object.assign({ acao: acao, token: estado.token }, dados || {});
-    return fetch(API, { method: 'POST', body: JSON.stringify(corpo) })
-      .then(function (r) { if (!r.ok) throw new Error('Falha de comunicação (' + r.status + ').'); return r.json(); })
-      .then(function (j) {
-        if (j.sessao === false) { sair(true); throw new Error(j.erro); }
-        if (!j.ok) throw new Error(j.erro || 'Erro desconhecido.');
-        return j;
-      });
+  /* ---------- telas ---------- */
+  function mostrar(id) {
+    ['tela-login', 'tela-config', 'tela-app'].forEach(function (t) { $('#' + t).hidden = t !== id; });
   }
 
-  /* ---------- login ---------- */
-  function mostrarLogin(msg) {
-    $('#tela-app').hidden = true;
-    $('#tela-login').hidden = false;
-    $('#login-erro').textContent = msg || (API ? '' : 'Plataforma ainda não conectada ao motor.');
+  function iniciarLogin(msg) {
+    mostrar('tela-login');
+    $('#login-erro').textContent = msg || '';
+    A.lerCofre().then(function (cofre) {
+      estado.cofre = cofre;
+      var sel = $('#login-usuario');
+      if (!cofre) {
+        $('#form-login').hidden = true;
+        $('#login-sem-config').hidden = false;
+        return;
+      }
+      $('#form-login').hidden = false;
+      $('#login-sem-config').hidden = true;
+      sel.innerHTML = '<option value="">Selecione</option>' + Object.keys(cofre.usuarios).map(function (k) {
+        return '<option value="' + esc(k) + '">' + esc(cofre.usuarios[k].nome) + '</option>';
+      }).join('');
+    }).catch(function (e) { $('#login-erro').textContent = e.message; });
   }
-  function entrar(token, nome) {
-    estado.token = token; estado.nome = nome;
-    guardar('ww_token', token); guardar('ww_nome', nome);
-    $('#nome-usuario').textContent = nome;
-    $('#tela-login').hidden = true;
-    $('#tela-app').hidden = false;
-    carregarLista();
-  }
-  function sair(expirou) {
-    if (!expirou && estado.token) api('sair').catch(function () {});
-    estado.token = null; estado.progresso = null;
-    guardar('ww_token', null); guardar('ww_nome', null);
-    mostrarLogin(expirou ? 'Sua sessão expirou. Entre novamente.' : '');
-  }
+
   $('#form-login').addEventListener('submit', function (e) {
     e.preventDefault();
-    var btn = $('button', e.target);
-    btn.disabled = true; $('#login-erro').textContent = '';
-    api('login', { usuario: $('#login-usuario').value, senha: $('#login-senha').value })
-      .then(function (j) { $('#login-senha').value = ''; entrar(j.token, j.nome); })
+    var btn = $('button[type="submit"]', e.target), u = $('#login-usuario').value;
+    var reg = estado.cofre && estado.cofre.usuarios[u];
+    if (!reg) { $('#login-erro').textContent = 'Selecione o usuário.'; return; }
+    btn.disabled = true; btn.textContent = 'Entrando…'; $('#login-erro').textContent = '';
+    A.abrir(reg, $('#login-senha').value)
+      .then(function (token) { $('#login-senha').value = ''; entrar(token, reg.nome); })
       .catch(function (err) { $('#login-erro').textContent = err.message; })
-      .then(function () { btn.disabled = false; });
+      .then(function () { btn.disabled = false; btn.textContent = 'Entrar'; });
   });
-  $('#btn-sair').addEventListener('click', function () { sair(false); });
+
+  function entrar(token, nome) {
+    estado.repo = new A.Repositorio(token);
+    estado.nome = nome;
+    guardar('ww_token', token); guardar('ww_nome', nome);
+    $('#nome-usuario').textContent = nome;
+    mostrar('tela-app');
+    $('.abas button[data-aba="faturas"]').click();
+    carregarLista();
+  }
+
+  function sair() {
+    estado.repo = null; estado.progresso = null; estado.registros = [];
+    guardar('ww_token', null); guardar('ww_nome', null);
+    iniciarLogin('');
+  }
+  $('#btn-sair').addEventListener('click', sair);
+
+  /* ---------- configuração inicial / troca de senha ---------- */
+  $$('[data-ir="config"]').forEach(function (b) { b.addEventListener('click', function () { mostrar('tela-config'); $('#config-erro').textContent = ''; }); });
+  $('#config-voltar').addEventListener('click', function () { iniciarLogin(''); });
+
+  $('#form-config').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var token = $('#config-token').value.trim(), s1 = $('#config-senha').value, s2 = $('#config-senha2').value;
+    var erro = $('#config-erro'), btn = $('button[type="submit"]', e.target);
+    erro.textContent = '';
+    if (s1 !== s2) { erro.textContent = 'As senhas não conferem.'; return; }
+    if (s1.length < 8 || !/[a-zA-Z]/.test(s1) || !/\d/.test(s1)) {
+      erro.textContent = 'Use uma senha com pelo menos 8 caracteres, misturando letras e números (ex.: WattWise@102030).';
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Configurando…';
+    var dados = new A.Repositorio(token, A.REPO_DADOS), site = new A.Repositorio(token, A.REPO_SITE);
+    dados.verificar().then(function () { return site.verificar(); }).then(function () {
+      return Promise.all(USUARIOS_PADRAO.map(function (u) {
+        return A.trancar(token, s1).then(function (r) { r.nome = u[1]; return [u[0], r]; });
+      }));
+    }).then(function (pares) {
+      var cofre = { versao: 1, atualizadoEm: new Date().toISOString(), usuarios: {} };
+      pares.forEach(function (p) { cofre.usuarios[p[0]] = p[1]; });
+      return site.info('assets/cofre.json').then(function (meta) {
+        return site.gravarBytes('assets/cofre.json', new TextEncoder().encode(JSON.stringify(cofre, null, 2)),
+          'Cofre de acesso atualizado', meta && meta.sha);
+      }).then(function () { estado.cofre = cofre; });
+    }).then(function () {
+      $('#form-config').reset();
+      entrar(token, 'Daniela');
+      avisar('Plataforma configurada. O site leva cerca de 1 minuto para publicar o novo acesso para as demais usuárias.');
+    }).catch(function (err) { erro.textContent = err.message; })
+      .then(function () { btn.disabled = false; btn.textContent = 'Salvar configuração'; });
+  });
+
+  function avisar(msg) {
+    var el = $('#aviso');
+    el.textContent = msg; el.hidden = false;
+    setTimeout(function () { el.hidden = true; }, 9000);
+  }
 
   /* ---------- abas ---------- */
   $$('.abas button').forEach(function (b) {
@@ -99,14 +167,19 @@
   function montarPainel(aba) {
     var t = TEXTOS[aba];
     var el = $('[data-painel="' + aba + '"]');
+    var opcoes = '<option value="">Automática (pelas abas)</option>' +
+      [1, 2, 3, 4, 5, 6].map(function (n) { return '<option value="' + n + '">Semana ' + n + '</option>'; }).join('');
     el.innerHTML =
       '<div class="card">' +
         '<div class="card-titulo"><span class="selo">' + t.selo + '</span><h2>' + t.titulo + '</h2></div>' +
         '<p class="ajuda">' + t.ajuda + '</p>' +
         '<form class="envio">' +
-          '<input class="campo" type="url" required placeholder="https://docs.google.com/spreadsheets/d/..." aria-label="Link da planilha">' +
+          '<label class="arquivo"><input type="file" required accept=".xlsx,.xls,.xlsm,.ods,.csv">' +
+            '<span class="arquivo-texto">Escolha ou arraste a planilha (.xlsx)</span></label>' +
+          '<label class="semana">Semana <select class="campo">' + opcoes + '</select></label>' +
           '<button class="btn btn-primario" type="submit">Gerar planilha</button>' +
         '</form>' +
+        '<p class="dica">No Google Planilhas: <b>Arquivo → Fazer download → Microsoft Excel (.xlsx)</b>. Assim todas as abas vão juntas.</p>' +
         '<div class="status" hidden></div>' +
       '</div>' +
       '<div class="card">' +
@@ -117,39 +190,111 @@
         '<div class="lista"><p class="vazio">Carregando…</p></div>' +
       '</div>';
 
+    var input = $('input[type="file"]', el), rotulo = $('.arquivo-texto', el), caixa = $('.arquivo', el);
+    input.addEventListener('change', function () {
+      rotulo.textContent = input.files[0] ? input.files[0].name : 'Escolha ou arraste a planilha (.xlsx)';
+      caixa.classList.toggle('escolhido', !!input.files[0]);
+    });
+    ['dragover', 'dragenter'].forEach(function (ev) { caixa.addEventListener(ev, function () { caixa.classList.add('arrastando'); }); });
+    ['dragleave', 'drop'].forEach(function (ev) { caixa.addEventListener(ev, function () { caixa.classList.remove('arrastando'); }); });
+
     $('form', el).addEventListener('submit', function (e) {
       e.preventDefault();
-      var campo = $('input', e.target), btn = $('button', e.target), st = $('.status', el);
+      var arq = input.files[0], btn = $('button', e.target), st = $('.status', el);
+      if (!arq) return;
       btn.disabled = true;
       st.hidden = false; st.className = 'status processando';
-      st.innerHTML = '<span class="spinner"></span>Conferindo a planilha e gerando a nova versão… isso pode levar até 2 minutos.';
-      api('processar', { aba: aba, link: campo.value.trim() })
-        .then(function (j) {
-          var r = j.registro;
-          st.className = 'status ok';
-          st.innerHTML = '<b>' + esc(r.nomeGerado) + '</b> gerada. Semana ' + esc(r.semana) + ': ' +
-            num(r.semFatura) + ' ' + t.rotSem + ' de ' + num(r.total) + ' ' + t.rotTotal + '. ' +
-            '<a href="' + esc(r.linkGerado) + '" target="_blank" rel="noopener">Abrir planilha gerada</a>';
-          campo.value = '';
-          estado.progresso = null;
-          carregarLista();
-        })
-        .catch(function (err) { st.className = 'status falha'; st.textContent = err.message; })
-        .then(function () { btn.disabled = false; });
+      var passo = function (txt) { st.innerHTML = '<span class="spinner"></span>' + esc(txt); };
+      passo('Lendo e conferindo a planilha…');
+      var resultado;
+      arq.arrayBuffer().then(function (buf) {
+        return esperarTela().then(function () {
+          resultado = P.processar(aba, arq.name, buf, $('select', e.target).value);
+          resultado.original = new Uint8Array(buf);
+          passo('Salvando a planilha enviada e a gerada…');
+          return salvarProcessamento(aba, arq.name, resultado, passo);
+        });
+      }).then(function (reg) {
+        st.className = 'status ok';
+        st.innerHTML = '<b>' + esc(reg.nomeGerado) + '</b> gerada. Semana ' + esc(reg.semana) + ': ' +
+          num(reg.semFatura) + ' ' + t.rotSem + ' de ' + num(reg.total) + ' ' + t.rotTotal + '. ' +
+          '<button class="btn btn-peq btn-primario" type="button">Baixar planilha gerada</button>';
+        $('button', st).addEventListener('click', function () { baixarBytes(resultado.bytes, reg.nomeGerado + '.xlsx', XLSX_MIME); });
+        $('form', el).reset(); rotulo.textContent = 'Escolha ou arraste a planilha (.xlsx)'; caixa.classList.remove('escolhido');
+        estado.progresso = null;
+        renderListas();
+      }).catch(function (err) {
+        st.className = 'status falha';
+        st.textContent = err.message;
+      }).then(function () { btn.disabled = false; });
     });
     $('[data-acao="atualizar"]', el).addEventListener('click', carregarLista);
   }
 
+  /** Grava no repositório privado: arquivo enviado, arquivo gerado, histórico, clientes e índice. */
+  function salvarProcessamento(aba, nomeArquivo, r, passo) {
+    var repo = estado.repo, agora = new Date(), id = carimbo(agora);
+    var pasta = 'dados/arquivos/' + r.mes.chave + '/';
+    var ext = (/\.[a-z0-9]+$/i.exec(nomeArquivo) || ['.xlsx'])[0].toLowerCase();
+    var caminhoOrigem = pasta + 'enviadas/' + id + ' ' + arquivoSeguro(nomeArquivo.replace(/\.[a-z0-9]+$/i, '')) + ext;
+    var caminhoGerado = pasta + 'geradas/' + id + ' ' + arquivoSeguro(r.nomeGerado) + '.xlsx';
+    var ult = r.semanas[r.semanas.length - 1];
+    var registro = {
+      id: id, criadoEm: agora.toISOString(), usuario: estado.nome, aba: aba, mes: r.mes.chave, mesRotulo: r.mes.rotulo,
+      semana: ult.n, semanas: r.semanas.map(function (s) { return s.n; }).join(', '),
+      nomeOrigem: nomeArquivo, caminhoOrigem: caminhoOrigem, nomeGerado: r.nomeGerado, caminhoGerado: caminhoGerado,
+      total: ult.total, comFatura: ult.comFatura, semFatura: ult.pendentes.length
+    };
+    var msg = r.nomeGerado + ' (' + estado.nome + ')';
+    return repo.gravarBytes(caminhoOrigem, r.original, 'Enviada: ' + nomeArquivo + ' (' + estado.nome + ')')
+      .then(function () { return repo.gravarBytes(caminhoGerado, r.bytes, 'Gerada: ' + msg); })
+      .then(function () {
+        passo('Atualizando o histórico de progresso…');
+        return repo.atualizarJSON(ARQ_HIST, { faturas: {}, contratos: {} }, function (h) {
+          h[aba] = h[aba] || {};
+          r.semanas.forEach(function (s) {
+            h[aba][R.chavePeriodo(r.mes.chave, s.n)] = {
+              mes: r.mes.chave, semana: s.n, total: s.total, comFatura: s.comFatura, semFatura: s.pendentes.length,
+              pendentes: s.pendentes.map(function (p) { return p.instalacao; }), atualizadoEm: registro.criadoEm, registro: id
+            };
+          });
+          return h;
+        }, 'Histórico: ' + msg);
+      })
+      .then(function () {
+        return repo.atualizarJSON(ARQ_CLIENTES, { faturas: {}, contratos: {} }, function (c) {
+          c[aba] = c[aba] || {};
+          r.semanas.forEach(function (s) {
+            s.pendentes.forEach(function (p) { c[aba][p.instalacao] = { cliente: p.cliente, cpfCnpj: p.cpfCnpj, info: p.info }; });
+          });
+          return c;
+        }, 'Clientes: ' + msg);
+      })
+      .then(function () {
+        passo('Registrando na lista de planilhas…');
+        return repo.atualizarJSON(ARQ_INDICE, { registros: [] }, function (ind) {
+          ind.registros = [registro].concat(ind.registros || []);
+          return ind;
+        }, 'Índice: ' + msg);
+      })
+      .then(function (ind) { estado.registros = ind.registros; return registro; });
+  }
+
   function carregarLista() {
+    if (!estado.repo) return;
     $$('.painel .lista').forEach(function (l) { if (!estado.registros.length) l.innerHTML = '<p class="vazio">Carregando…</p>'; });
-    return api('listar').then(function (j) {
-      estado.registros = j.registros || [];
-      ['faturas', 'contratos'].forEach(renderLista);
-      var hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      $$('.atualizado').forEach(function (s) { s.textContent = 'Atualizado às ' + hora; });
+    return estado.repo.lerJSON(ARQ_INDICE, { registros: [] }).then(function (ind) {
+      estado.registros = ind.registros || [];
+      renderListas();
     }).catch(function (err) {
       $$('.painel .lista').forEach(function (l) { l.innerHTML = '<p class="vazio">' + esc(err.message) + '</p>'; });
     });
+  }
+
+  function renderListas() {
+    ['faturas', 'contratos'].forEach(renderLista);
+    var hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    $$('.atualizado').forEach(function (s) { if (!s.id) s.textContent = 'Atualizado às ' + hora; });
   }
 
   function renderLista(aba) {
@@ -167,17 +312,30 @@
           return '<div class="item"><div>' +
             '<div class="item-titulo">' + esc(r.nomeGerado) + '</div>' +
             '<div class="item-meta">Gerada em ' + esc(dataHora(r.criadoEm)) + ' por ' + esc(r.usuario) +
-              ' · semanas ' + esc(r.semanas) + ' · origem: ' + esc(r.nomeOrigem) + '</div>' +
+              ' · semanas ' + esc(r.semanas) + ' · enviada: ' + esc(r.nomeOrigem) + '</div>' +
             '<div class="numeros"><span><b>' + num(r.total) + '</b> ' + t.rotTotal + '</span>' +
               '<span><b>' + num(r.comFatura) + '</b> ' + t.rotCom + '</span>' +
               '<span><b>' + num(r.semFatura) + '</b> ' + t.rotSem + '</span></div>' +
             '</div><div class="item-botoes">' +
-            '<a class="btn btn-peq" href="' + esc(r.linkOrigem) + '" target="_blank" rel="noopener">Planilha enviada</a>' +
-            '<a class="btn btn-peq btn-primario" href="' + esc(r.linkGerado) + '" target="_blank" rel="noopener">Planilha gerada</a>' +
+            '<button class="btn btn-peq" data-baixar="' + esc(r.caminhoOrigem) + '" data-nome="' + esc(r.nomeOrigem) + '">Baixar enviada</button>' +
+            '<button class="btn btn-peq btn-primario" data-baixar="' + esc(r.caminhoGerado) + '" data-nome="' + esc(r.nomeGerado + '.xlsx') + '">Baixar gerada</button>' +
             '</div></div>';
         }).join('') + '</details>';
     }).join('');
+    $$('[data-baixar]', el).forEach(function (b) {
+      b.addEventListener('click', function () {
+        var txt = b.textContent;
+        b.disabled = true; b.textContent = 'Baixando…';
+        estado.repo.lerBytes(b.dataset.baixar).then(function (bytes) {
+          if (!bytes) throw new Error('Arquivo não encontrado.');
+          baixarBytes(bytes, b.dataset.nome, /\.csv$/i.test(b.dataset.nome) ? 'text/csv' : XLSX_MIME);
+        }).catch(function (err) { alertar(err.message); })
+          .then(function () { b.disabled = false; b.textContent = txt; });
+      });
+    });
   }
+
+  function alertar(msg) { avisar(msg); }
 
   /* ---------- aba 3: progresso ---------- */
   function segmentado(id, chave) {
@@ -195,7 +353,8 @@
 
   function carregarProgresso() {
     $('#prog-conteudo').innerHTML = '<p class="vazio">Carregando…</p>';
-    api('progresso').then(function (j) { estado.progresso = j.dados; renderProgresso(); })
+    Promise.all([estado.repo.lerJSON(ARQ_HIST, {}), estado.repo.lerJSON(ARQ_CLIENTES, {})])
+      .then(function (r) { estado.progresso = R.calcularProgresso(r[0], r[1]); renderProgresso(); })
       .catch(function (err) { $('#prog-conteudo').innerHTML = '<p class="vazio">' + esc(err.message) + '</p>'; });
   }
 
@@ -374,5 +533,5 @@
   montarPainel('faturas');
   montarPainel('contratos');
   var tk = ler('ww_token');
-  if (tk) entrar(tk, ler('ww_nome') || ''); else mostrarLogin();
+  if (tk) entrar(tk, ler('ww_nome') || ''); else iniciarLogin('');
 })();
