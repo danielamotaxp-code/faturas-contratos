@@ -123,10 +123,7 @@
     var erro = $('#config-erro'), btn = $('button[type="submit"]', e.target);
     erro.textContent = '';
     if (s1 !== s2) { erro.textContent = 'As senhas não conferem.'; return; }
-    if (s1.length < 8 || !/[a-zA-Z]/.test(s1) || !/\d/.test(s1)) {
-      erro.textContent = 'Use uma senha com pelo menos 8 caracteres, misturando letras e números (ex.: WattWise@102030).';
-      return;
-    }
+    if (s1.length < 4) { erro.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; return; }
     btn.disabled = true; btn.textContent = 'Configurando…';
     var dados = new A.Repositorio(token, A.REPO_DADOS), site = new A.Repositorio(token, A.REPO_SITE);
     dados.verificar().then(function () { return site.verificar(); }).then(function () {
@@ -141,7 +138,7 @@
           'Cofre de acesso atualizado', meta && meta.sha);
       }).then(function () { estado.cofre = cofre; });
     }).then(function () {
-      $('#form-config').reset();
+      $('#config-token').value = '';
       entrar(token, 'Daniela');
       avisar('Plataforma configurada. O site leva cerca de 1 minuto para publicar o novo acesso para as demais usuárias.');
     }).catch(function (err) { erro.textContent = err.message; })

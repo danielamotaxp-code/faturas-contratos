@@ -47,7 +47,7 @@ A senha abre o cofre (AES-256-GCM, com chave derivada por PBKDF2 em 600 mil iter
    - Em *Repository access*, escolha **Only select repositories** e marque `faturas-contratos` e `faturas-contratos-acessos`.
    - Em *Permissions → Repository permissions → Contents*, escolha **Read and write**.
    - Escolha a validade mais longa disponível.
-2. No site, clique em **Configurar acesso / trocar senha**. Cole o token e defina a senha da equipe: no mínimo 8 caracteres, com letras e números.
+2. No site, clique em **Configurar acesso / trocar senha**. Cole o token. A senha da equipe já vem preenchida com **102030**.
 3. A plataforma confere o token, criptografa e publica o cofre. Em cerca de 1 minuto, as demais usuárias já conseguem entrar.
 
 Quando o token vencer, repita esses passos. Os dados já guardados não são perdidos.
