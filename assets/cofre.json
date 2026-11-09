@@ -1,0 +1,24 @@
+{
+  "versao": 1,
+  "atualizadoEm": "2026-11-09T16:26:24.144Z",
+  "usuarios": {
+    "daniela": {
+      "salt": "hjUJCc0JawlnpTidTpPPxw==",
+      "iv": "OOk3JPQb/fPP79+K",
+      "dados": "J66H1kvlBf/UVZpD4xXg/3m1P3kfO/SMnXeIvcPBJMz+4U8vz0J9RTKhiMPabEoG1mM2+eM/b7essXdL0i2Mh/HSGZXzIP+yDe1f9vwFVM4WmEEhIwBz/iYsEfvkyFtzuxoOdJ6TpQb/c3yl9A==",
+      "nome": "Daniela"
+    },
+    "paula": {
+      "salt": "e0E2+urAywE2shOoVK2z2Q==",
+      "iv": "YbZMnQtJ29mfKjQX",
+      "dados": "tZ+LksYX3ECRy2z83e3jX3kRoNKNHlQZ/EefLGive6cRIC7GSntuB8748F4YrMxMOvaev1d9g2Z4H3NkA/nCP8v7Mg1PPb7tH0Ou9nbJ5cOJRnuq4WOBeSdVB+mTGFhNpiMI8p+lrZX1A7Czaw==",
+      "nome": "Paula"
+    },
+    "ytala": {
+      "salt": "NuGpnqnQ1fxuxVxBilWzkQ==",
+      "iv": "IfzF0YCH3e9Uos1N",
+      "dados": "BDi35cytVH7nNzAy/laqjFJQGSXtNDDzkMBc/zsbXe63GPtN9VBV3EOeTcTj15W+86aDxwIB7SMKRKIxNhzll+VwsLXsMKeFbyeMrku9TYz3cjAA0bfxQNPZP4tp+Ze+VzlihORyjWIeb6NFxQ==",
+      "nome": "Ytala"
+    }
+  }
+}
