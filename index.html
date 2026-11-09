@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WattWise · Faturas e Contratos</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <!-- Login -->
+  <section id="tela-login" class="login" hidden>
+    <form id="form-login" class="login-card" autocomplete="on">
+      <div class="marca"><span class="marca-logo">W</span><div><strong>WattWise</strong><small>Faturas e Contratos</small></div></div>
+      <label>Usuário
+        <select id="login-usuario" required>
+          <option value="">Selecione</option>
+          <option value="daniela">Daniela</option>
+          <option value="paula">Paula</option>
+          <option value="ytala">Ytala</option>
+        </select>
+      </label>
+      <label>Senha <input id="login-senha" type="password" required autocomplete="current-password"></label>
+      <button class="btn btn-primario" type="submit">Entrar</button>
+      <p id="login-erro" class="erro" role="alert"></p>
+    </form>
+  </section>
+
+  <!-- Plataforma -->
+  <div id="tela-app" hidden>
+    <header class="topo">
+      <div class="marca"><span class="marca-logo">W</span><div><strong>WattWise</strong><small>Faturas e Contratos</small></div></div>
+      <div class="usuario"><span id="nome-usuario"></span><button id="btn-sair" class="btn btn-link">Sair</button></div>
+    </header>
+
+    <nav class="abas" role="tablist">
+      <button role="tab" data-aba="faturas" class="ativa">Faturas Pendentes</button>
+      <button role="tab" data-aba="contratos">Contratos sem Faturas</button>
+      <button role="tab" data-aba="progresso">Progresso</button>
+    </nav>
+
+    <main>
+      <!-- ABA 1 e ABA 2 usam o mesmo molde -->
+      <section class="painel" data-painel="faturas"></section>
+      <section class="painel" data-painel="contratos" hidden></section>
+
+      <!-- ABA 3 -->
+      <section class="painel" data-painel="progresso" hidden>
+        <div class="card">
+          <div class="card-titulo"><span class="selo">P</span><h2>Progresso das faturas</h2></div>
+          <p class="ajuda">Acompanha, a cada conferência, quantos clientes ficaram sem fatura, quantos foram resolvidos e quem continua pendente.</p>
+          <div class="filtros">
+            <div class="segmentado" id="prog-aba">
+              <button data-v="faturas" class="ativo">Faturas Pendentes</button>
+              <button data-v="contratos">Contratos sem Faturas</button>
+            </div>
+            <div class="segmentado" id="prog-periodo">
+              <button data-v="semanal" class="ativo">Por semana</button>
+              <button data-v="mensal">Por mês</button>
+            </div>
+            <button class="btn" id="prog-atualizar">Atualizar</button>
+          </div>
+        </div>
+        <div id="prog-conteudo"><p class="vazio">Carregando…</p></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+  <script src="assets/config.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
