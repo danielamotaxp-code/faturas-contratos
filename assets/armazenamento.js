@@ -119,7 +119,7 @@
   Repositorio.prototype.gravarBytes = function (caminho, bytes, mensagem, sha) {
     var corpo = { message: mensagem, content: bytesParaBase64(bytes) };
     if (sha) corpo.sha = sha;
-    return this.req(caminhoUrl(caminho), { method: 'PUT', body: JSON.stringify(corpo) }).then(function (r) {
+    return this.req(caminhoUrl(caminho), { method: 'PUT', body: JSON.stringify(corpo), headers: { 'Content-Type': 'application/json' } }).then(function (r) {
       if (r.status === 409 || r.status === 422) { var e = new Error('conflito'); e.conflito = true; throw e; }
       if (!r.ok) throw new Error('Falha ao salvar ' + caminho + ' (' + r.status + ').');
       return r.json();
