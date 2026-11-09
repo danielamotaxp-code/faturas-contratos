@@ -126,6 +126,19 @@
     });
   };
 
+  /** Apaga um arquivo (se existir). */
+  Repositorio.prototype.apagar = function (caminho, mensagem) {
+    var self = this;
+    return this.info(caminho).then(function (meta) {
+      if (!meta) return false;
+      return self.req(caminhoUrl(caminho), { method: 'DELETE', body: JSON.stringify({ message: mensagem, sha: meta.sha }),
+        headers: { 'Content-Type': 'application/json' } }).then(function (r) {
+        if (!r.ok && r.status !== 404) throw new Error('Falha ao apagar ' + caminho + ' (' + r.status + ').');
+        return true;
+      });
+    });
+  };
+
   /**
    * Atualiza um JSON com segurança: lê a versão atual, aplica a mudança e grava.
    * Se outra pessoa salvou ao mesmo tempo, lê de novo e repete (até 4 vezes).

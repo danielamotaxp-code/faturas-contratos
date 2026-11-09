@@ -140,3 +140,13 @@ td.quebra { white-space: normal; min-width: 220px; }
 .dica { color: var(--texto-3); font-size: .85rem; margin: 10px 0 0; }
 .aviso { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--texto); color: #fff; padding: 12px 18px; border-radius: 8px; max-width: 90vw; z-index: 20; font-size: .9rem; }
 .painel > *, #prog-conteudo > * { min-width: 0; }
+
+/* semanas dentro do mês */
+.semana-bloco { margin: 0 10px 10px; border: 1px solid var(--borda); border-radius: 8px; background: #fff; }
+.semana-topo { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--borda); background: #fbfcfe; border-radius: 8px 8px 0 0; }
+.semana-qtd { color: var(--texto-3); font-size: .85rem; flex: 1; }
+.semana-vazia { color: var(--texto-3); font-size: .88rem; margin: 0; padding: 12px; }
+.semana-bloco .item { margin: 10px; }
+.btn-perigo { color: var(--vermelho); }
+.btn-perigo:hover { border-color: var(--vermelho); }
+.btn-perigo.confirmar { background: var(--vermelho); color: #fff; border-color: var(--vermelho); }

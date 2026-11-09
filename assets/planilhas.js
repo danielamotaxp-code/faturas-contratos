@@ -43,7 +43,25 @@
       border: { top: BORDA, bottom: BORDA, left: BORDA, right: BORDA } };
   }
 
+  /** Deixa CPF/CNPJ completos e instalação / unidade consumidora como texto, para nada se perder. */
+  function normalizarCodigos(cab, linhas) {
+    var docs = [], codigos = [];
+    cab.forEach(function (h, i) {
+      var n = R.normalizar(h);
+      if (/cpf|cnpj/.test(n)) docs.push(i);
+      else if (/instala|unid.*consum|unidade\s*consumidora|^uc$/.test(n)) codigos.push(i);
+    });
+    if (!docs.length && !codigos.length) return linhas;
+    return linhas.map(function (l) {
+      var c = l.slice();
+      docs.forEach(function (i) { if (c[i] !== '' && c[i] != null) c[i] = R.corrigirDocumento(c[i]); });
+      codigos.forEach(function (i) { if (c[i] !== '' && c[i] != null) c[i] = R.codigoTexto(c[i]); });
+      return c;
+    });
+  }
+
   function abaDeDados(cab, linhas, cores) {
+    linhas = normalizarCodigos(cab, linhas);
     var ws = X.utils.aoa_to_sheet([cab].concat(linhas), { cellDates: true });
     var nLin = linhas.length + 1, nCol = cab.length;
     for (var r = 0; r < nLin; r++) {

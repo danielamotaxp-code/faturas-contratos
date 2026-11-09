@@ -161,18 +161,20 @@
   });
 
   /* ---------- abas 1 e 2 ---------- */
+  var SEM_ARQUIVO = 'Escolha ou arraste a planilha (.xlsx)';
+
   function montarPainel(aba) {
     var t = TEXTOS[aba];
     var el = $('[data-painel="' + aba + '"]');
     var opcoes = '<option value="">Automática (pelas abas)</option>' +
-      [1, 2, 3, 4, 5, 6].map(function (n) { return '<option value="' + n + '">Semana ' + n + '</option>'; }).join('');
+      [1, 2, 3, 4, 5].map(function (n) { return '<option value="' + n + '">Até a Semana ' + n + '</option>'; }).join('');
     el.innerHTML =
       '<div class="card">' +
         '<div class="card-titulo"><span class="selo">' + t.selo + '</span><h2>' + t.titulo + '</h2></div>' +
         '<p class="ajuda">' + t.ajuda + '</p>' +
         '<form class="envio">' +
           '<label class="arquivo"><input type="file" required accept=".xlsx,.xls,.xlsm,.ods,.csv">' +
-            '<span class="arquivo-texto">Escolha ou arraste a planilha (.xlsx)</span></label>' +
+            '<span class="arquivo-texto">' + SEM_ARQUIVO + '</span></label>' +
           '<label class="semana">Semana <select class="campo">' + opcoes + '</select></label>' +
           '<button class="btn btn-primario" type="submit">Gerar planilha</button>' +
         '</form>' +
@@ -181,15 +183,16 @@
       '</div>' +
       '<div class="card">' +
         '<div class="lista-topo">' +
-          '<div class="card-titulo"><span class="selo">i</span><h3>Planilhas enviadas e geradas por mês</h3></div>' +
+          '<div class="card-titulo"><span class="selo">i</span><h3>Planilhas enviadas e geradas por mês e semana</h3></div>' +
           '<div><button class="btn btn-peq" data-acao="atualizar">Atualizar lista</button> <span class="atualizado"></span></div>' +
         '</div>' +
         '<div class="lista"><p class="vazio">Carregando…</p></div>' +
+        '<input type="file" class="inserir-arquivo" accept=".xlsx,.xls,.xlsm,.ods,.csv" hidden>' +
       '</div>';
 
-    var input = $('input[type="file"]', el), rotulo = $('.arquivo-texto', el), caixa = $('.arquivo', el);
+    var input = $('form input[type="file"]', el), rotulo = $('.arquivo-texto', el), caixa = $('.arquivo', el);
     input.addEventListener('change', function () {
-      rotulo.textContent = input.files[0] ? input.files[0].name : 'Escolha ou arraste a planilha (.xlsx)';
+      rotulo.textContent = input.files[0] ? input.files[0].name : SEM_ARQUIVO;
       caixa.classList.toggle('escolhido', !!input.files[0]);
     });
     ['dragover', 'dragenter'].forEach(function (ev) { caixa.addEventListener(ev, function () { caixa.classList.add('arrastando'); }); });
@@ -197,35 +200,63 @@
 
     $('form', el).addEventListener('submit', function (e) {
       e.preventDefault();
-      var arq = input.files[0], btn = $('button', e.target), st = $('.status', el);
-      if (!arq) return;
+      if (!input.files[0]) return;
+      var btn = $('button', e.target);
       btn.disabled = true;
-      st.hidden = false; st.className = 'status processando';
-      var passo = function (txt) { st.innerHTML = '<span class="spinner"></span>' + esc(txt); };
-      passo('Lendo e conferindo a planilha…');
-      var resultado;
-      arq.arrayBuffer().then(function (buf) {
-        return esperarTela().then(function () {
-          resultado = P.processar(aba, arq.name, buf, $('select', e.target).value);
-          resultado.original = new Uint8Array(buf);
-          passo('Salvando a planilha enviada e a gerada…');
-          return salvarProcessamento(aba, arq.name, resultado, passo);
-        });
-      }).then(function (reg) {
-        st.className = 'status ok';
-        st.innerHTML = '<b>' + esc(reg.nomeGerado) + '</b> gerada. Semana ' + esc(reg.semana) + ': ' +
-          num(reg.semFatura) + ' ' + t.rotSem + ' de ' + num(reg.total) + ' ' + t.rotTotal + '. ' +
-          '<button class="btn btn-peq btn-primario" type="button">Baixar planilha gerada</button>';
-        $('button', st).addEventListener('click', function () { baixarBytes(resultado.bytes, reg.nomeGerado + '.xlsx', XLSX_MIME); });
-        $('form', el).reset(); rotulo.textContent = 'Escolha ou arraste a planilha (.xlsx)'; caixa.classList.remove('escolhido');
-        estado.progresso = null;
-        renderListas();
-      }).catch(function (err) {
-        st.className = 'status falha';
-        st.textContent = err.message;
+      enviarArquivo(aba, input.files[0], $('select', e.target).value).then(function (ok) {
+        if (ok) { e.target.reset(); rotulo.textContent = SEM_ARQUIVO; caixa.classList.remove('escolhido'); }
       }).then(function () { btn.disabled = false; });
     });
+
+    // "Inserir planilha" de uma semana da lista
+    var inserir = $('.inserir-arquivo', el);
+    inserir.addEventListener('change', function () {
+      var arq = inserir.files[0], semana = inserir.dataset.semana, mes = inserir.dataset.mes;
+      inserir.value = '';
+      if (!arq) return;
+      var m = R.mesDoNome(arq.name);
+      if (m && mes && m.chave !== mes) {
+        mostrarStatus(aba, 'falha', 'O arquivo "' + arq.name + '" é de ' + m.rotulo + ', mas você escolheu inserir em ' + R.rotuloMes(mes) + '.');
+        return;
+      }
+      enviarArquivo(aba, arq, semana);
+    });
+
     $('[data-acao="atualizar"]', el).addEventListener('click', carregarLista);
+  }
+
+  function mostrarStatus(aba, tipo, html) {
+    var st = $('[data-painel="' + aba + '"] .status');
+    st.hidden = false; st.className = 'status ' + tipo;
+    st.innerHTML = html;
+    st.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return st;
+  }
+
+  /** Lê, confere, gera e salva. Devolve true se deu certo. */
+  function enviarArquivo(aba, arq, semana) {
+    var t = TEXTOS[aba], resultado;
+    var passo = function (txt) { mostrarStatus(aba, 'processando', '<span class="spinner"></span>' + esc(txt)); };
+    passo('Lendo e conferindo "' + arq.name + '"…');
+    return arq.arrayBuffer().then(function (buf) {
+      return esperarTela().then(function () {
+        resultado = P.processar(aba, arq.name, buf, semana);
+        resultado.original = new Uint8Array(buf);
+        passo('Salvando a planilha enviada e a gerada…');
+        return salvarProcessamento(aba, arq.name, resultado, passo);
+      });
+    }).then(function (reg) {
+      var st = mostrarStatus(aba, 'ok', '<b>' + esc(reg.nomeGerado) + '</b> gerada. Semana ' + esc(reg.semana) + ': ' +
+        num(reg.semFatura) + ' ' + t.rotSem + ' de ' + num(reg.total) + ' ' + t.rotTotal + '. ' +
+        '<button class="btn btn-peq btn-primario" type="button">Baixar planilha gerada</button>');
+      $('button', st).addEventListener('click', function () { baixarBytes(resultado.bytes, reg.nomeGerado + '.xlsx', XLSX_MIME); });
+      estado.progresso = null;
+      renderListas();
+      return true;
+    }).catch(function (err) {
+      mostrarStatus(aba, 'falha', esc(err.message));
+      return false;
+    });
   }
 
   /** Grava no repositório privado: arquivo enviado, arquivo gerado, histórico, clientes e índice. */
@@ -250,9 +281,11 @@
         return repo.atualizarJSON(ARQ_HIST, { faturas: {}, contratos: {} }, function (h) {
           h[aba] = h[aba] || {};
           r.semanas.forEach(function (s) {
-            h[aba][R.chavePeriodo(r.mes.chave, s.n)] = {
+            var ch = R.chavePeriodo(r.mes.chave, s.n);
+            var p = h[aba][ch] = h[aba][ch] && h[aba][ch].versoes ? h[aba][ch] : { versoes: {} };
+            p.versoes[id] = {
               mes: r.mes.chave, semana: s.n, total: s.total, comFatura: s.comFatura, semFatura: s.pendentes.length,
-              pendentes: s.pendentes.map(function (p) { return p.instalacao; }), atualizadoEm: registro.criadoEm, registro: id
+              pendentes: s.pendentes.map(function (x) { return x.instalacao; }), criadoEm: registro.criadoEm
             };
           });
           return h;
@@ -277,6 +310,31 @@
       .then(function (ind) { estado.registros = ind.registros; return registro; });
   }
 
+  /** Exclui um envio: tira da lista, apaga os dois arquivos e devolve o histórico da semana à versão anterior. */
+  function excluirRegistro(reg) {
+    var repo = estado.repo, msg = 'Excluída: ' + reg.nomeGerado + ' (' + estado.nome + ')';
+    return repo.atualizarJSON(ARQ_INDICE, { registros: [] }, function (ind) {
+      ind.registros = (ind.registros || []).filter(function (r) { return r.id !== reg.id; });
+      return ind;
+    }, msg).then(function (ind) {
+      estado.registros = ind.registros;
+      return repo.atualizarJSON(ARQ_HIST, { faturas: {}, contratos: {} }, function (h) {
+        var porAba = h[reg.aba] || {};
+        Object.keys(porAba).forEach(function (ch) {
+          var p = porAba[ch];
+          if (p.versoes && p.versoes[reg.id]) {
+            delete p.versoes[reg.id];
+            if (!Object.keys(p.versoes).length) delete porAba[ch];
+          } else if (!p.versoes && p.registro === reg.id) {
+            delete porAba[ch];
+          }
+        });
+        return h;
+      }, 'Histórico: ' + msg);
+    }).then(function () { return repo.apagar(reg.caminhoGerado, msg); })
+      .then(function () { return repo.apagar(reg.caminhoOrigem, msg); });
+  }
+
   function carregarLista() {
     if (!estado.repo) return;
     $$('.painel .lista').forEach(function (l) { if (!estado.registros.length) l.innerHTML = '<p class="vazio">Carregando…</p>'; });
@@ -294,31 +352,49 @@
     $$('.atualizado').forEach(function (s) { if (!s.id) s.textContent = 'Atualizado às ' + hora; });
   }
 
+  function itemHtml(r, t) {
+    return '<div class="item" data-id="' + esc(r.id) + '"><div>' +
+      '<div class="item-titulo">' + esc(r.nomeGerado) + '</div>' +
+      '<div class="item-meta">Gerada em ' + esc(dataHora(r.criadoEm)) + ' por ' + esc(r.usuario) +
+        ' · semanas ' + esc(r.semanas) + ' · enviada: ' + esc(r.nomeOrigem) + '</div>' +
+      '<div class="numeros"><span><b>' + num(r.total) + '</b> ' + t.rotTotal + '</span>' +
+        '<span><b>' + num(r.comFatura) + '</b> ' + t.rotCom + '</span>' +
+        '<span><b>' + num(r.semFatura) + '</b> ' + t.rotSem + '</span></div>' +
+      '</div><div class="item-botoes">' +
+      '<button class="btn btn-peq" data-baixar="' + esc(r.caminhoOrigem) + '" data-nome="' + esc(r.nomeOrigem) + '">Baixar enviada</button>' +
+      '<button class="btn btn-peq btn-primario" data-baixar="' + esc(r.caminhoGerado) + '" data-nome="' + esc(r.nomeGerado + '.xlsx') + '">Baixar gerada</button>' +
+      '<button class="btn btn-peq btn-perigo" data-excluir="' + esc(r.id) + '">Excluir</button>' +
+      '</div></div>';
+  }
+
   function renderLista(aba) {
     var t = TEXTOS[aba];
     var regs = estado.registros.filter(function (r) { return r.aba === aba; });
     var el = $('[data-painel="' + aba + '"] .lista');
-    if (!regs.length) { el.innerHTML = '<p class="vazio">Nenhuma planilha enviada ainda.</p>'; return; }
+    if (!regs.length) {
+      el.innerHTML = '<p class="vazio">Nenhuma planilha enviada ainda. Use o campo acima para enviar a primeira.</p>';
+      return;
+    }
     var porMes = {};
     regs.forEach(function (r) { (porMes[r.mes] = porMes[r.mes] || []).push(r); });
     el.innerHTML = Object.keys(porMes).sort().reverse().map(function (mes, i) {
-      var itens = porMes[mes];
+      var itens = porMes[mes], porSemana = {};
+      itens.forEach(function (r) { (porSemana[r.semana] = porSemana[r.semana] || []).push(r); });
+      var maxSemana = Math.max.apply(null, [4].concat(itens.map(function (r) { return Number(r.semana); })));
+      var semanas = '';
+      for (var s = 1; s <= maxSemana; s++) {
+        var lista = porSemana[s] || [];
+        semanas += '<div class="semana-bloco">' +
+          '<div class="semana-topo"><b>Semana ' + s + '</b>' +
+          '<span class="semana-qtd">' + (lista.length ? lista.length + (lista.length === 1 ? ' planilha' : ' planilhas') : 'sem planilha') + '</span>' +
+          '<button class="btn btn-peq" data-inserir="' + s + '" data-mes="' + mes + '">+ Inserir planilha</button></div>' +
+          (lista.length ? lista.map(function (r) { return itemHtml(r, t); }).join('') : '<p class="semana-vazia">Nenhuma planilha nesta semana.</p>') +
+          '</div>';
+      }
       return '<details class="mes"' + (i === 0 ? ' open' : '') + '><summary>' + esc(rotuloMes(mes)) +
-        '<small>' + itens.length + (itens.length === 1 ? ' planilha' : ' planilhas') + '</small></summary>' +
-        itens.map(function (r) {
-          return '<div class="item"><div>' +
-            '<div class="item-titulo">' + esc(r.nomeGerado) + '</div>' +
-            '<div class="item-meta">Gerada em ' + esc(dataHora(r.criadoEm)) + ' por ' + esc(r.usuario) +
-              ' · semanas ' + esc(r.semanas) + ' · enviada: ' + esc(r.nomeOrigem) + '</div>' +
-            '<div class="numeros"><span><b>' + num(r.total) + '</b> ' + t.rotTotal + '</span>' +
-              '<span><b>' + num(r.comFatura) + '</b> ' + t.rotCom + '</span>' +
-              '<span><b>' + num(r.semFatura) + '</b> ' + t.rotSem + '</span></div>' +
-            '</div><div class="item-botoes">' +
-            '<button class="btn btn-peq" data-baixar="' + esc(r.caminhoOrigem) + '" data-nome="' + esc(r.nomeOrigem) + '">Baixar enviada</button>' +
-            '<button class="btn btn-peq btn-primario" data-baixar="' + esc(r.caminhoGerado) + '" data-nome="' + esc(r.nomeGerado + '.xlsx') + '">Baixar gerada</button>' +
-            '</div></div>';
-        }).join('') + '</details>';
+        '<small>' + itens.length + (itens.length === 1 ? ' planilha' : ' planilhas') + '</small></summary>' + semanas + '</details>';
     }).join('');
+
     $$('[data-baixar]', el).forEach(function (b) {
       b.addEventListener('click', function () {
         var txt = b.textContent;
@@ -326,8 +402,40 @@
         estado.repo.lerBytes(b.dataset.baixar).then(function (bytes) {
           if (!bytes) throw new Error('Arquivo não encontrado.');
           baixarBytes(bytes, b.dataset.nome, /\.csv$/i.test(b.dataset.nome) ? 'text/csv' : XLSX_MIME);
-        }).catch(function (err) { alertar(err.message); })
+        }).catch(function (err) { avisar(err.message); })
           .then(function () { b.disabled = false; b.textContent = txt; });
+      });
+    });
+
+    $$('[data-inserir]', el).forEach(function (b) {
+      b.addEventListener('click', function () {
+        var inp = $('[data-painel="' + aba + '"] .inserir-arquivo');
+        inp.dataset.semana = b.dataset.inserir;
+        inp.dataset.mes = b.dataset.mes;
+        inp.click();
+      });
+    });
+
+    // Excluir pede confirmação no próprio botão (2 cliques)
+    $$('[data-excluir]', el).forEach(function (b) {
+      b.addEventListener('click', function () {
+        var reg = estado.registros.filter(function (r) { return r.id === b.dataset.excluir; })[0];
+        if (!reg) return;
+        if (!b.classList.contains('confirmar')) {
+          b.classList.add('confirmar');
+          b.textContent = 'Confirmar exclusão';
+          setTimeout(function () { if (b.isConnected && !b.disabled) { b.classList.remove('confirmar'); b.textContent = 'Excluir'; } }, 5000);
+          return;
+        }
+        b.disabled = true; b.textContent = 'Excluindo…';
+        excluirRegistro(reg).then(function () {
+          estado.progresso = null;
+          renderListas();
+          avisar('"' + reg.nomeGerado + '" foi excluída.');
+        }).catch(function (err) {
+          avisar(err.message);
+          carregarLista();
+        });
       });
     });
   }

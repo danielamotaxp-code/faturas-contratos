@@ -18,6 +18,8 @@ Ela funciona sozinha. A colaboradora envia o arquivo da planilha, a plataforma c
 - **O cliente é identificado pela instalação** (*Instalação* / *Número instalação*).
 - **Fatura com status *Cancelado* conta como fatura gerada.**
 - Cada envio gera uma **planilha nova**. As anteriores continuam guardadas, com as cores delas.
+- **CPF/CNPJ sempre completos.** Quando a planilha original guarda o documento como número e perde os zeros do começo, a plataforma recoloca esses zeros e confere os dígitos verificadores. Instalação e unidade consumidora são gravadas como texto, sem notação científica.
+- A lista de planilhas é organizada por **mês → Semana 1 a 4 (ou mais)**. Cada semana tem o botão **+ Inserir planilha**, e cada planilha tem o botão **Excluir**, que pede confirmação. Ao excluir um envio, o progresso daquela semana volta para o envio anterior, se houver um.
 - No Google Planilhas, baixe o arquivo em **Arquivo → Fazer download → Microsoft Excel (.xlsx)**, para que todas as abas venham juntas.
 
 ## Onde fica cada coisa

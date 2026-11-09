@@ -5,7 +5,7 @@
 (function (raiz) {
   'use strict';
 
-  var AZUL = 'CFE0F3';
+  var AZUL = '9BC2E6';
   var BRANCO = 'FFFFFF';
   var MESES_NOME = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto',
     'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -55,6 +55,52 @@
     return String(v == null ? '' : v).replace(/\D/g, '').replace(/^0+/, '');
   }
 
+  /* ---------- CPF / CNPJ ---------- */
+  function cpfValido(c) {
+    if (/^(\d)\1{10}$/.test(c)) return false;
+    var d = c.split('').map(Number);
+    for (var n = 9; n <= 10; n++) {
+      var s = 0;
+      for (var i = 0; i < n; i++) s += d[i] * (n + 1 - i);
+      if ((s * 10) % 11 % 10 !== d[n]) return false;
+    }
+    return true;
+  }
+  function cnpjValido(c) {
+    if (/^(\d)\1{13}$/.test(c)) return false;
+    var d = c.split('').map(Number);
+    var pesos = [[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]];
+    for (var k = 0; k < 2; k++) {
+      var s = 0;
+      for (var i = 0; i < pesos[k].length; i++) s += d[i] * pesos[k][i];
+      var r = s % 11;
+      if ((r < 2 ? 0 : 11 - r) !== d[12 + k]) return false;
+    }
+    return true;
+  }
+  function preencher(d, n) { while (d.length < n) d = '0' + d; return d; }
+
+  /**
+   * Devolve o CPF (11 dígitos) ou CNPJ (14 dígitos) completo, recolocando os zeros
+   * à esquerda que a planilha perde quando guarda o documento como número.
+   * Usa os dígitos verificadores para decidir entre CPF e CNPJ.
+   */
+  function corrigirDocumento(v) {
+    if (typeof v === 'number') v = v.toFixed(0);
+    var d = String(v == null ? '' : v).replace(/\D/g, '');
+    if (!d) return String(v == null ? '' : v).trim();
+    var cpf = preencher(d, 11), cnpj = preencher(d, 14);
+    if (d.length <= 11 && cpfValido(cpf)) return cpf;
+    if (d.length <= 14 && cnpjValido(cnpj)) return cnpj;
+    return d.length <= 11 ? cpf : cnpj;
+  }
+
+  /** Número longo (instalação, unidade consumidora) como texto, sem notação científica nem casas decimais. */
+  function codigoTexto(v) {
+    if (typeof v === 'number') return v.toFixed(0);
+    return String(v == null ? '' : v).trim();
+  }
+
   function texto(v) {
     if (v instanceof Date && !isNaN(v)) return ('0' + v.getDate()).slice(-2) + '/' + ('0' + (v.getMonth() + 1)).slice(-2) + '/' + v.getFullYear();
     if (typeof v === 'number') return Number.isInteger(v) ? v.toFixed(0) : String(v);
@@ -83,6 +129,9 @@
     if (!lista.length) {
       if (!semanaManual) throw new Error('A planilha não tem abas "Semana N". Escolha a semana no campo "Semana" e envie de novo.');
       lista = [{ n: Number(semanaManual), aba: nomesAbas[0] }];
+    } else if (semanaManual) {
+      lista = lista.filter(function (s) { return s.n <= Number(semanaManual); });
+      if (!lista.length) throw new Error('O arquivo não tem a aba "Semana ' + semanaManual + '" (nem semanas anteriores).');
     }
     return lista.sort(function (a, b) { return a.n - b.n; });
   }
@@ -101,6 +150,10 @@
     var lista = Object.keys(por).map(function (k) { return por[k]; }).filter(function (s) { return s.c && s.f; });
     if (!lista.length) throw new Error('Não encontrei as abas "Contratos - Semana N" e "Faturas - Semana N" no arquivo.');
     if (lista.some(function (s) { return !s.n; })) throw new Error('As abas não têm o número da semana. Escolha a semana no campo "Semana" e envie de novo.');
+    if (semanaManual) {
+      lista = lista.filter(function (s) { return s.n <= Number(semanaManual); });
+      if (!lista.length) throw new Error('O arquivo não tem as abas da Semana ' + semanaManual + ' (nem de semanas anteriores).');
+    }
     return lista.sort(function (a, b) { return a.n - b.n; });
   }
 
@@ -125,7 +178,7 @@
       if (!grupos[k]) { grupos[k] = { cliente: '', cpfCnpj: '', usina: '', meses: {} }; ordem.push(k); }
       var g = grupos[k];
       if (!g.cliente && cc >= 0) g.cliente = texto(l[cc]);
-      if (!g.cpfCnpj && cd >= 0) g.cpfCnpj = texto(l[cd]);
+      if (!g.cpfCnpj && cd >= 0) g.cpfCnpj = corrigirDocumento(l[cd]);
       if (!g.usina && cu >= 0) g.usina = texto(l[cu]);
       if (m) g.meses[m] = true;
       if (m === mesAtual) comAtual[k] = true;
@@ -173,9 +226,31 @@
       if (cS >= 0 && texto(l[cS])) info.push('Status: ' + texto(l[cS]));
       if (cU >= 0 && texto(l[cU])) info.push('Usina: ' + texto(l[cU]));
       pendentes.push({ instalacao: k || '(sem instalação)', cliente: cT >= 0 ? texto(l[cT]) : '',
-        cpfCnpj: cD >= 0 ? texto(l[cD]) : '', info: info.join(' · ') });
+        cpfCnpj: cD >= 0 ? corrigirDocumento(l[cD]) : '', info: info.join(' · ') });
     });
     return { indices: indices, pendentes: pendentes, total: linhasC.length, comFatura: linhasC.length - indices.length };
+  }
+
+  /**
+   * O histórico guarda, para cada semana, uma versão por envio:
+   *   historico[aba][periodo].versoes[registroId] = { mes, semana, total, comFatura, semFatura, pendentes, criadoEm }
+   * Vale a versão mais recente. Ao excluir um envio, a semana volta para a versão anterior (se houver).
+   */
+  function historicoVigente(historico) {
+    var out = {};
+    ['faturas', 'contratos'].forEach(function (aba) {
+      out[aba] = {};
+      var h = (historico && historico[aba]) || {};
+      Object.keys(h).forEach(function (ch) {
+        var p = h[ch];
+        if (!p.versoes) { out[aba][ch] = p; return; }
+        var ids = Object.keys(p.versoes);
+        if (!ids.length) return;
+        ids.sort(function (a, b) { return String(p.versoes[a].criadoEm).localeCompare(String(p.versoes[b].criadoEm)); });
+        out[aba][ch] = p.versoes[ids[ids.length - 1]];
+      });
+    });
+    return out;
   }
 
   /**
@@ -184,6 +259,7 @@
    * clientes:  { faturas: { instalacao: { cliente, cpfCnpj, info } }, contratos: {...} }
    */
   function calcularProgresso(historico, clientes) {
+    historico = historicoVigente(historico);
     var saida = {};
     ['faturas', 'contratos'].forEach(function (aba) {
       var h = (historico && historico[aba]) || {};
@@ -242,6 +318,7 @@
     AZUL: AZUL, BRANCO: BRANCO, MESES_NOME: MESES_NOME,
     normalizar: normalizar, rotuloMes: rotuloMes, chavePeriodo: chavePeriodo, mesDoNome: mesDoNome,
     mesDaCelula: mesDaCelula, chaveInstalacao: chaveInstalacao, texto: texto, coluna: coluna,
+    corrigirDocumento: corrigirDocumento, codigoTexto: codigoTexto, historicoVigente: historicoVigente,
     semanasFaturas: semanasFaturas, semanasContratos: semanasContratos,
     analisarFaturas: analisarFaturas, analisarContratos: analisarContratos, calcularProgresso: calcularProgresso
   };
