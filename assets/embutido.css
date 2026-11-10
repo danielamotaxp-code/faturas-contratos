@@ -1,0 +1,4 @@
+/* Dentro do portal único: sem cabeçalho próprio e nas cores da WattWise (rosa) */
+html.plat-embutido .topo .marca, html.plat-embutido #nome-usuario, html.plat-embutido #btn-sair { display: none; }
+html.plat-embutido .topo { justify-content: flex-end; padding-top: 8px; padding-bottom: 8px; }
+html.plat-embutido:root { --azul: #d23c80; --azul-escuro: #a82a63; --azul-claro: #fde3ee; --azul-medio: #e46fa3; }

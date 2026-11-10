@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <script src="/central-atendimento/kit/modulo.js" data-modulo="faturas"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WattWise · Faturas e Contratos</title>
+  <link rel="stylesheet" href="assets/style.css?v=202611101922">
+  <link rel="stylesheet" href="assets/embutido.css?v=1">
+</head>
+<body>
+  <!-- Login -->
+  <section id="tela-login" class="login" hidden>
+    <div class="login-card">
+      <div class="marca"><span class="marca-logo">W</span><div><strong>WattWise</strong><small>Faturas e Contratos</small></div></div>
+      <form id="form-login" autocomplete="on" hidden>
+        <label>Usuário <select id="login-usuario" required></select></label>
+        <label>Senha <input id="login-senha" type="password" required autocomplete="current-password"></label>
+        <button class="btn btn-primario" type="submit">Entrar</button>
+      </form>
+      <div id="login-sem-config" hidden>
+        <p class="ajuda">A plataforma ainda não foi configurada. A configuração é feita uma única vez, pela administradora.</p>
+        <button class="btn btn-primario" type="button" data-ir="config">Configurar plataforma</button>
+      </div>
+      <p id="login-erro" class="erro" role="alert"></p>
+    </div>
+  </section>
+
+  <!-- Configuração (uma vez, ou para trocar a senha) -->
+  <section id="tela-config" class="login" hidden>
+    <form id="form-config" class="login-card largo" autocomplete="off">
+      <div class="marca"><span class="marca-logo">W</span><div><strong>Configurar acesso</strong><small>Feito uma vez pela administradora</small></div></div>
+      <p class="ajuda">A plataforma guarda as planilhas no repositório privado <b>faturas-contratos-acessos</b>. Para isso ela usa um token do GitHub, que fica <b>criptografado com a senha de acesso</b>. Sem a senha, ninguém consegue usá-lo.</p>
+      <label>Token do GitHub (fine-grained, com acesso de leitura e gravação em <i>Contents</i> nos dois repositórios)
+        <input id="config-token" type="password" required placeholder="github_pat_..." autocomplete="off"></label>
+      <label>Senha de acesso da equipe (Daniela, Paula e Ytala)
+        <input id="config-senha" type="password" required autocomplete="new-password" value="102030"></label>
+      <label>Repita a senha <input id="config-senha2" type="password" required autocomplete="new-password" value="102030"></label>
+      <button class="btn btn-primario" type="submit">Salvar configuração</button>
+      <button class="btn btn-link" type="button" id="config-voltar">Voltar</button>
+      <p id="config-erro" class="erro" role="alert"></p>
+    </form>
+  </section>
+
+  <!-- Plataforma -->
+  <div id="tela-app" hidden>
+    <header class="topo">
+      <div class="marca"><span class="marca-logo">W</span><div><strong>WattWise</strong><small>Faturas e Contratos</small></div></div>
+      <div class="usuario"><button id="btn-google" class="btn btn-peq btn-google" hidden>Entrar com Google</button><span id="nome-usuario"></span><button id="btn-config" class="btn btn-link">Configurações</button><button id="btn-sair" class="btn btn-link">Sair</button></div>
+    </header>
+
+    <nav class="abas" role="tablist">
+      <button role="tab" data-aba="faturas" class="ativa">Faturas Pendentes</button>
+      <button role="tab" data-aba="contratos">Contratos sem Faturas</button>
+      <button role="tab" data-aba="progresso">Progresso</button>
+    </nav>
+
+    <main>
+      <!-- ABA 1 e ABA 2 usam o mesmo molde -->
+      <section class="painel" data-painel="faturas"></section>
+      <section class="painel" data-painel="contratos" hidden></section>
+
+      <!-- Configurações -->
+      <section class="painel" data-painel="config" hidden>
+        <div class="card">
+          <div class="card-titulo"><span class="selo">G</span><h2>Leitura de planilhas pelo link do Google</h2></div>
+          <p class="ajuda">Para gerar a partir do link, a plataforma usa uma <b>chave de API do Google</b> (feita uma vez, gratuita). Situação: <span id="google-situacao"></span></p>
+          <form id="form-google" class="envio">
+            <input id="google-chave" class="campo" type="password" placeholder="Cole a chave (começa com AIza...)" autocomplete="off" aria-label="Chave de API do Google">
+            <button class="btn btn-primario" type="submit">Salvar chave</button>
+          </form>
+          <p id="google-msg" class="dica"></p>
+          <details class="passos">
+            <summary>Como criar a chave (uma vez só)</summary>
+            <ol>
+              <li>Abra <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">console.cloud.google.com/projectcreate</a>, dê o nome <b>WattWise Plataforma</b> e clique em <b>Criar</b>.</li>
+              <li>Abra <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">a página da Google Sheets API</a>, confira se o projeto WattWise Plataforma está selecionado no topo e clique em <b>Ativar</b>.</li>
+              <li>Abra <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credenciais</a> → <b>Criar credenciais</b> → <b>Chave de API</b>. Copie a chave que aparecer.</li>
+              <li>Clique em <b>Editar chave de API</b> (ou no nome da chave). Em <b>Restrições de aplicativos</b>, escolha <b>Sites</b> e adicione <code>https://danielamotaxp-code.github.io/*</code>. Em <b>Restrições de API</b>, escolha <b>Restringir chave</b> e marque <b>Google Sheets API</b>. Clique em <b>Salvar</b>.</li>
+              <li>Cole a chave acima e clique em <b>Salvar chave</b>.</li>
+            </ol>
+          </details>
+        </div>
+        <div class="card">
+          <div class="card-titulo"><span class="selo">G</span><h2>Atualizar a planilha do Google no mesmo link</h2></div>
+          <p class="ajuda">Com o <b>"Entrar com Google"</b>, a plataforma lê a planilha com a conta de quem entrou (a planilha não precisa ficar aberta para qualquer pessoa) e <b>atualiza a própria planilha</b>: pinta a aba "Semana N" em Faturas Pendentes e cria a aba "Contratos sem Fatura – Semana N" em Contratos sem Faturas. Antes, a plataforma guarda uma cópia em Excel de como a planilha estava. Situação: <span id="cliente-situacao"></span></p>
+          <form id="form-cliente" class="envio">
+            <input id="cliente-id" class="campo" type="text" placeholder="ID do cliente (termina com .apps.googleusercontent.com)" autocomplete="off" aria-label="ID do cliente OAuth">
+            <button class="btn btn-primario" type="submit">Salvar ID</button>
+          </form>
+          <p id="cliente-msg" class="dica"></p>
+        </div>
+      </section>
+
+      <!-- ABA 3 -->
+      <section class="painel" data-painel="progresso" hidden>
+        <div class="card">
+          <div class="card-titulo"><span class="selo">P</span><h2>Progresso das faturas</h2></div>
+          <p class="ajuda">Acompanha, a cada conferência, quantos clientes ficaram sem fatura, quantos foram resolvidos e quem continua pendente.</p>
+          <div class="filtros">
+            <div class="segmentado" id="prog-aba">
+              <button data-v="faturas" class="ativo">Faturas Pendentes</button>
+              <button data-v="contratos">Contratos sem Faturas</button>
+            </div>
+            <div class="segmentado" id="prog-periodo">
+              <button data-v="semanal" class="ativo">Por semana</button>
+              <button data-v="mensal">Por mês</button>
+            </div>
+            <button class="btn" id="prog-atualizar">Atualizar</button>
+          </div>
+        </div>
+        <div id="prog-conteudo"><p class="vazio">Carregando…</p></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+  <div id="aviso" class="aviso" role="status" hidden></div>
+  <script src="assets/vendor/cpexcel.js?v=202611101922"></script>
+  <script src="assets/vendor/xlsx.bundle.js?v=202611101922"></script>
+  <script src="assets/regras.js?v=202611101922"></script>
+  <script src="assets/planilhas.js?v=202611101922"></script>
+  <script src="assets/armazenamento.js?v=202611101922"></script>
+  <script src="assets/google.js?v=202611101922"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="assets/app.js?v=202611101922"></script>
+</body>
+</html>

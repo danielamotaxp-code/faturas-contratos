@@ -107,6 +107,7 @@
   }
 
   function sair() {
+    if (window.PLAT) return window.PLAT.sair();
     estado.repo = null; estado.progresso = null; estado.registros = [];
     guardar('ww_token', null); guardar('ww_nome', null);
     iniciarLogin('');
@@ -810,7 +811,8 @@
   montarPainel('faturas');
   montarPainel('contratos');
   var tk = ler('ww_token');
-  if (location.hash === '#configurar') { mostrar('tela-config'); } // acesso da administradora (não aparece no site)
+  if (window.PLAT) entrar(window.PLAT.token, window.PLAT.usuario.nome); // dentro do portal: usa o login de lá
+  else if (location.hash === '#configurar') { mostrar('tela-config'); } // acesso da administradora (não aparece no site)
   else if (tk) entrar(tk, ler('ww_nome') || ''); else iniciarLogin('');
   window.addEventListener('hashchange', function () { if (location.hash === '#configurar') mostrar('tela-config'); });
 })();
