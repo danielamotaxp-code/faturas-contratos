@@ -115,7 +115,10 @@
 
   /* ---------- configuração inicial / troca de senha ---------- */
   $$('[data-ir="config"]').forEach(function (b) { b.addEventListener('click', function () { mostrar('tela-config'); $('#config-erro').textContent = ''; }); });
-  $('#config-voltar').addEventListener('click', function () { iniciarLogin(''); });
+  $('#config-voltar').addEventListener('click', function () {
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+    iniciarLogin('');
+  });
 
   $('#form-config').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -807,5 +810,7 @@
   montarPainel('faturas');
   montarPainel('contratos');
   var tk = ler('ww_token');
-  if (tk) entrar(tk, ler('ww_nome') || ''); else iniciarLogin('');
+  if (location.hash === '#configurar') { mostrar('tela-config'); } // acesso da administradora (não aparece no site)
+  else if (tk) entrar(tk, ler('ww_nome') || ''); else iniciarLogin('');
+  window.addEventListener('hashchange', function () { if (location.hash === '#configurar') mostrar('tela-config'); });
 })();
