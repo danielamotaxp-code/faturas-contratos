@@ -115,6 +115,30 @@
     return -1;
   }
 
+  /** Os últimos N meses até o mês da planilha. Ex.: 2026-10 -> [2026-08, 2026-09, 2026-10] */
+  function mesesJanela(mesAtual, n) {
+    var p = String(mesAtual).split('-'), ano = Number(p[0]), mes = Number(p[1]), out = [];
+    for (var i = (n || 3) - 1; i >= 0; i--) {
+      var m = mes - i, a = ano;
+      while (m < 1) { m += 12; a--; }
+      out.push(chaveMes(a, m));
+    }
+    return out;
+  }
+
+  /** Mantém só as linhas dos últimos 3 meses (pela coluna "Mês Referencia"). */
+  function filtrarUltimosMeses(cab, linhas, indices, mesAtual) {
+    var cm = coluna(cab, [/mes\s*refer/, /referencia/]);
+    if (cm < 0) throw new Error('Não encontrei a coluna "Mês Referencia" na planilha.');
+    var janela = mesesJanela(mesAtual, 3), ok = {};
+    janela.forEach(function (m) { ok[m] = true; });
+    var L = [], I = [];
+    linhas.forEach(function (l, i) {
+      if (ok[mesDaCelula(l[cm])]) { L.push(l); I.push(indices ? indices[i] : i); }
+    });
+    return { linhas: L, indices: I, janela: janela, removidas: linhas.length - L.length };
+  }
+
   function numeroSemana(nome) {
     var m = /semana\s*(\d+)/.exec(normalizar(nome));
     return m ? Number(m[1]) : null;
@@ -204,11 +228,36 @@
    * ABA 2 – Contratos sem Faturas.
    * Compara contratos com faturas (gateway) pela instalação e devolve só os contratos sem fatura.
    */
-  function analisarContratos(cabC, linhasC, cabF, linhasF) {
+  function analisarContratos(cabC, linhasC, cabF, linhasF, mesAtual, nomeAbaC) {
     var iC = coluna(cabC, [/numero\s*(da\s*)?instala/, /^instalacao$/, /instala/]);
     var iF = coluna(cabF, [/^instalacao$/, /numero\s*(da\s*)?instala/, /instala/]);
-    if (iC < 0) throw new Error('Não encontrei a coluna "Número instalação" na aba de contratos.');
+    var abaC = nomeAbaC ? '"' + nomeAbaC + '"' : 'de contratos';
+    if (iC < 0) throw new Error('Não encontrei a coluna "Número instalação" na aba ' + abaC + '.');
     if (iF < 0) throw new Error('Não encontrei a coluna "Instalação" na aba de faturas.');
+
+    // Confere se a aba de contratos tem mesmo contratos (e não cabeçalhos repetidos ou faturas)
+    var comNumero = linhasC.filter(function (l) { return chaveInstalacao(l[iC]).length >= 5; }).length;
+    if (!linhasC.length || comNumero < linhasC.length * 0.5) {
+      var repetido = linhasC.length && normalizar(linhasC[0][iC]) === normalizar(cabC[iC]);
+      throw new Error('A aba ' + abaC + ' não parece ter contratos: só ' + comNumero + ' de ' + linhasC.length +
+        ' linhas têm número de instalação' + (repetido ? ' (as linhas repetem o cabeçalho "' + cabC[iC] + '")' : '') +
+        '. Confira se os contratos foram colados nessa aba e envie de novo.');
+    }
+    if (coluna(cabC, [/mes\s*refer/]) >= 0 && coluna(cabC, [/numero\s*(da\s*)?instala/, /titular/]) < 0) {
+      throw new Error('A aba ' + abaC + ' tem colunas de faturas (ex.: "Mês Referencia"), e não de contratos. Confira se as abas não foram trocadas.');
+    }
+
+    // Só valem as faturas do mês da planilha (o gateway pode trazer vários meses)
+    var cmF = coluna(cabF, [/mes\s*refer/, /referencia/]);
+    var faturasDoMes = linhasF;
+    if (mesAtual && cmF >= 0) {
+      faturasDoMes = linhasF.filter(function (l) { return mesDaCelula(l[cmF]) === mesAtual; });
+      if (!faturasDoMes.length) {
+        throw new Error('A aba de faturas não tem nenhuma fatura de ' + rotuloMes(mesAtual) +
+          ' na coluna "' + cabF[cmF] + '". Confira o mês no nome da planilha.');
+      }
+    }
+    linhasF = faturasDoMes;
     var cT = coluna(cabC, [/titular/, /^cliente/]);
     var cD = coluna(cabC, [/cpf|cnpj/]);
     var cS = coluna(cabC, [/^status\s*contrato/, /status/]);
@@ -228,7 +277,8 @@
       pendentes.push({ instalacao: k || '(sem instalação)', cliente: cT >= 0 ? texto(l[cT]) : '',
         cpfCnpj: cD >= 0 ? corrigirDocumento(l[cD]) : '', info: info.join(' · ') });
     });
-    return { indices: indices, pendentes: pendentes, total: linhasC.length, comFatura: linhasC.length - indices.length };
+    return { indices: indices, pendentes: pendentes, total: linhasC.length, comFatura: linhasC.length - indices.length,
+      faturasDoMes: linhasF.length };
   }
 
   /**
@@ -319,7 +369,7 @@
     normalizar: normalizar, rotuloMes: rotuloMes, chavePeriodo: chavePeriodo, mesDoNome: mesDoNome,
     mesDaCelula: mesDaCelula, chaveInstalacao: chaveInstalacao, texto: texto, coluna: coluna,
     corrigirDocumento: corrigirDocumento, codigoTexto: codigoTexto, historicoVigente: historicoVigente,
-    semanasFaturas: semanasFaturas, semanasContratos: semanasContratos,
+    semanasFaturas: semanasFaturas, mesesJanela: mesesJanela, filtrarUltimosMeses: filtrarUltimosMeses, semanasContratos: semanasContratos,
     analisarFaturas: analisarFaturas, analisarContratos: analisarContratos, calcularProgresso: calcularProgresso
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Regras = api;

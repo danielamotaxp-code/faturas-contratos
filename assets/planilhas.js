@@ -107,15 +107,19 @@
     var abas = [], resultado = [], google = null;
     semanas.forEach(function (s) {
       var d = dadosDaAba(wb, s.aba);
-      var a = R.analisarFaturas(d.cab, d.linhas, mes.chave);
-      google = { aba: s.aba, colunas: d.cab.length, indices: d.indices, cores: a.cores };
-      abas.push(['Semana ' + s.n, abaDeDados(d.cab, d.linhas, a.cores)]);
-      resultado.push({ n: s.n, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes });
+      var f = R.filtrarUltimosMeses(d.cab, d.linhas, d.indices, mes.chave);
+      if (!f.linhas.length) throw new Error('A aba "' + s.aba + '" não tem faturas de ' + f.janela.map(R.rotuloMes).join(', ') + '.');
+      var a = R.analisarFaturas(d.cab, f.linhas, mes.chave);
+      google = { aba: s.aba, colunas: d.cab.length, indices: f.indices, cores: a.cores };
+      abas.push(['Semana ' + s.n, abaDeDados(d.cab, f.linhas, a.cores)]);
+      resultado.push({ n: s.n, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes,
+        linhas: f.linhas.length, removidas: f.removidas, janela: f.janela });
     });
     var ult = resultado[resultado.length - 1];
     var out = X.utils.book_new();
-    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Instalações', 'Com fatura de ' + mes.rotulo, 'Sem fatura (gerar)'],
-      resultado.map(function (s) { return ['Semana ' + s.n, s.total, s.comFatura, s.pendentes.length]; })), 'Resumo');
+    var meses = ult.janela.map(R.rotuloMes).join(', ');
+    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Meses considerados', 'Linhas (faturas)', 'Instalações', 'Com fatura de ' + mes.rotulo, 'Sem fatura (gerar)', 'Linhas de outros meses (fora do filtro)'],
+      resultado.map(function (s) { return ['Semana ' + s.n, meses, s.linhas, s.total, s.comFatura, s.pendentes.length, s.removidas]; })), 'Resumo');
     abas.forEach(function (a) { X.utils.book_append_sheet(out, a[1], a[0]); });
     X.utils.book_append_sheet(out, abaSimples(['Instalação', 'Cliente', 'CPF/CNPJ', 'Detalhes'],
       ult.pendentes.map(function (p) { return [p.instalacao, p.cliente, p.cpfCnpj, p.info]; })), 'Pendentes – Semana ' + ult.n);
@@ -128,16 +132,16 @@
     var abas = [], resultado = [], google = null;
     semanas.forEach(function (s) {
       var c = dadosDaAba(wb, s.c), f = dadosDaAba(wb, s.f);
-      var a = R.analisarContratos(c.cab, c.linhas, f.cab, f.linhas);
+      var a = R.analisarContratos(c.cab, c.linhas, f.cab, f.linhas, mes.chave, s.c);
       google = { titulo: 'Contratos sem Fatura – Semana ' + s.n,
         valores: [c.cab].concat(normalizarCodigos(c.cab, a.indices.map(function (i) { return c.linhas[i]; }))) };
       abas.push(['Semana ' + s.n, abaDeDados(c.cab, a.indices.map(function (i) { return c.linhas[i]; }), null)]);
-      resultado.push({ n: s.n, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes });
+      resultado.push({ n: s.n, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes, faturasDoMes: a.faturasDoMes });
     });
     var ult = resultado[resultado.length - 1];
     var out = X.utils.book_new();
-    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Contratos vinculados', 'Com fatura gerada', 'Sem fatura'],
-      resultado.map(function (s) { return ['Semana ' + s.n, s.total, s.comFatura, s.pendentes.length]; })), 'Resumo');
+    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Contratos vinculados', 'Com fatura de ' + mes.rotulo, 'Sem fatura', 'Faturas de ' + mes.rotulo + ' no gateway'],
+      resultado.map(function (s) { return ['Semana ' + s.n, s.total, s.comFatura, s.pendentes.length, s.faturasDoMes]; })), 'Resumo');
     abas.forEach(function (a) { X.utils.book_append_sheet(out, a[1], a[0]); });
     return { nomeGerado: 'Contratos sem Faturas – ' + mes.rotulo + ' – Semana ' + ult.n, bytes: gravar(out), semanas: resultado, google: google };
   }

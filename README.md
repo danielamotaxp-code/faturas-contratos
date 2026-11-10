@@ -32,6 +32,8 @@ A configuração é feita uma vez, em **Configurações → ID do cliente**: um 
 
 - **O mês vem do nome do arquivo.** O nome precisa ter o mês e o ano, por exemplo *OUT 2026*.
 - **O cliente é identificado pela instalação** (*Instalação* / *Número instalação*).
+- **Faturas Pendentes usa só os últimos 3 meses**: o mês da planilha e os dois anteriores (ex.: OUT 2026 → agosto, setembro e outubro). As linhas de outros meses, ou sem mês, ficam fora da planilha gerada, e a aba *Resumo* mostra quantas saíram. No Google, só as linhas desses 3 meses são pintadas.
+- **Contratos sem Faturas compara só com as faturas do mês da planilha**: o gateway pode trazer vários meses, e só valem as faturas do mês. Se a aba de contratos não tiver contratos (por exemplo, linhas que repetem o cabeçalho, ou colunas de fatura no lugar das de contrato), a plataforma avisa e não gera nada.
 - **Fatura com status *Cancelado* conta como fatura gerada.**
 - Cada envio gera uma **planilha nova**. As anteriores continuam guardadas, com as cores delas.
 - **CPF/CNPJ sempre completos.** Quando a planilha original guarda o documento como número e perde os zeros do começo, a plataforma recoloca esses zeros e confere os dígitos verificadores. Instalação e unidade consumidora são gravadas como texto, sem notação científica.
