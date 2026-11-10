@@ -134,6 +134,8 @@
     var folha = planilha.folhas[nomeAba];
     if (!folha) return Promise.reject(new Error('Não encontrei a aba "' + nomeAba + '" na planilha do Google.'));
     var pedidos = folha.bandas.map(function (b) { return { deleteBanding: { bandedRangeId: b } }; });
+    // cabeçalho fixo ao rolar
+    pedidos.push({ updateSheetProperties: { properties: { sheetId: folha.sheetId, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } });
     var i = 0;
     while (i < indices.length) {
       var j = i;

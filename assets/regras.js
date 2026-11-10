@@ -144,41 +144,42 @@
     return m ? Number(m[1]) : null;
   }
 
-  /** Abas "Semana N" de uma planilha de faturas. Sem abas assim, usa a primeira com a semana informada. */
-  function semanasFaturas(nomesAbas, semanaManual) {
-    var lista = nomesAbas.map(function (nome) {
-      var n = numeroSemana(nome);
-      return n ? { n: n, aba: nome } : null;
-    }).filter(Boolean);
-    if (!lista.length) {
-      if (!semanaManual) throw new Error('A planilha não tem abas "Semana N". Escolha a semana no campo "Semana" e envie de novo.');
-      lista = [{ n: Number(semanaManual), aba: nomesAbas[0] }];
-    } else if (semanaManual) {
-      lista = lista.filter(function (s) { return s.n <= Number(semanaManual); });
-      if (!lista.length) throw new Error('O arquivo não tem a aba "Semana ' + semanaManual + '" (nem semanas anteriores).');
-    }
-    return lista.sort(function (a, b) { return a.n - b.n; });
+  /** Semana do mês pela data: dias 1–7 = 1, 8–14 = 2, 15–21 = 3, 22 em diante = 4. */
+  function semanaDaData(d) {
+    d = d || new Date();
+    return Math.min(4, Math.ceil(d.getDate() / 7));
   }
 
-  /** Pares "Contratos - Semana N" + "Faturas - Semana N". */
-  function semanasContratos(nomesAbas, semanaManual) {
+  /**
+   * Aba de faturas a conferir: a aba "Semana <preferida>" se existir; senão a aba "Semana N" mais recente;
+   * senão a primeira aba da planilha.
+   */
+  function abaFaturas(nomesAbas, preferida) {
+    var semanas = nomesAbas.map(function (nome) { return { n: numeroSemana(nome), aba: nome }; })
+      .filter(function (x) { return x.n; }).sort(function (a, b) { return a.n - b.n; });
+    var igual = semanas.filter(function (x) { return x.n === Number(preferida); })[0];
+    if (igual) return igual.aba;
+    if (semanas.length) return semanas[semanas.length - 1].aba;
+    return nomesAbas[0];
+  }
+
+  /** Par de abas Contratos + Faturas a conferir (mesma lógica de escolha da semana). */
+  function abaContratos(nomesAbas, preferida) {
     var por = {};
     nomesAbas.forEach(function (nome) {
       var norm = normalizar(nome);
-      var n = numeroSemana(norm) || Number(semanaManual) || 0;
+      if (/sem\s*fatura/.test(norm)) return; // abas geradas pela própria plataforma
+      var n = numeroSemana(norm) || 0;
       var tipo = /contrat/.test(norm) ? 'c' : (/fatur|gateway|pagamento/.test(norm) ? 'f' : null);
       if (!tipo) return;
       por[n] = por[n] || { n: n };
-      por[n][tipo] = nome;
+      if (!por[n][tipo]) por[n][tipo] = nome;
     });
-    var lista = Object.keys(por).map(function (k) { return por[k]; }).filter(function (s) { return s.c && s.f; });
-    if (!lista.length) throw new Error('Não encontrei as abas "Contratos - Semana N" e "Faturas - Semana N" no arquivo.');
-    if (lista.some(function (s) { return !s.n; })) throw new Error('As abas não têm o número da semana. Escolha a semana no campo "Semana" e envie de novo.');
-    if (semanaManual) {
-      lista = lista.filter(function (s) { return s.n <= Number(semanaManual); });
-      if (!lista.length) throw new Error('O arquivo não tem as abas da Semana ' + semanaManual + ' (nem de semanas anteriores).');
-    }
-    return lista.sort(function (a, b) { return a.n - b.n; });
+    var pares = Object.keys(por).map(function (k) { return por[k]; }).filter(function (s) { return s.c && s.f; })
+      .sort(function (a, b) { return a.n - b.n; });
+    if (!pares.length) throw new Error('Não encontrei uma aba de contratos e uma aba de faturas (ex.: "Contratos - Semana 1" e "Faturas - Semana 1").');
+    var igual = pares.filter(function (x) { return x.n === Number(preferida); })[0];
+    return igual || pares[pares.length - 1];
   }
 
   /**
@@ -369,7 +370,8 @@
     normalizar: normalizar, rotuloMes: rotuloMes, chavePeriodo: chavePeriodo, mesDoNome: mesDoNome,
     mesDaCelula: mesDaCelula, chaveInstalacao: chaveInstalacao, texto: texto, coluna: coluna,
     corrigirDocumento: corrigirDocumento, codigoTexto: codigoTexto, historicoVigente: historicoVigente,
-    semanasFaturas: semanasFaturas, mesesJanela: mesesJanela, filtrarUltimosMeses: filtrarUltimosMeses, semanasContratos: semanasContratos,
+    semanaDaData: semanaDaData, abaFaturas: abaFaturas, abaContratos: abaContratos,
+    mesesJanela: mesesJanela, filtrarUltimosMeses: filtrarUltimosMeses,
     analisarFaturas: analisarFaturas, analisarContratos: analisarContratos, calcularProgresso: calcularProgresso
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Regras = api;

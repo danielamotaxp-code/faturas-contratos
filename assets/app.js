@@ -10,7 +10,7 @@
     faturas: {
       selo: '1',
       titulo: 'Faturas Pendentes',
-      ajuda: 'Cole o link da planilha de faturas do mês no Google (ex.: <b>Clientes Não Faturados – OUT 2026</b>) ou envie o arquivo. O mês é lido do <b>nome da planilha</b> e cada aba <b>Semana N</b> é conferida. A plataforma gera uma planilha nova com todas as semanas: clientes com fatura do mês ficam em <b>azul</b> (todas as linhas) e os que ainda não têm ficam em <b>branco</b>.',
+      ajuda: 'Cole o link da planilha de faturas do mês no Google (ex.: <b>Clientes Não Faturados – OUT 2026</b>) ou envie o arquivo. O mês é lido do <b>nome da planilha</b> e a <b>semana</b> pela data do envio (ou a que vocês escolherem). Entram só os <b>últimos 3 meses</b>. A plataforma gera uma planilha nova com as semanas do mês: clientes com fatura do mês ficam em <b>azul</b> (todas as linhas) e os que ainda não têm ficam em <b>branco</b>.',
       rotTotal: 'instalações', rotCom: 'com fatura do mês', rotSem: 'sem fatura (gerar)'
     },
     contratos: {
@@ -166,8 +166,8 @@
   function montarPainel(aba) {
     var t = TEXTOS[aba];
     var el = $('[data-painel="' + aba + '"]');
-    var opcoes = '<option value="">Automática (pelas abas)</option>' +
-      [1, 2, 3, 4, 5].map(function (n) { return '<option value="' + n + '">Até a Semana ' + n + '</option>'; }).join('');
+    var opcoes = '<option value="">Automática (pela data: Semana ' + R.semanaDaData(new Date()) + ')</option>' +
+      [1, 2, 3, 4].map(function (n) { return '<option value="' + n + '">Semana ' + n + '</option>'; }).join('');
     el.innerHTML =
       '<div class="card">' +
         '<div class="card-titulo"><span class="selo">' + t.selo + '</span><h2>' + t.titulo + '</h2></div>' +
@@ -252,13 +252,40 @@
     }
   }
 
+  /** Semana do envio: a escolhida, ou a calculada pela data de hoje (dias 1–7 = 1, 8–14 = 2, 15–21 = 3, 22+ = 4). */
+  function semanaDoEnvio(escolhida) { return Number(escolhida) || R.semanaDaData(new Date()); }
+
+  /** Baixa as planilhas geradas das semanas anteriores do mesmo mês, para entrarem na planilha nova. */
+  function carregarAnteriores(aba, mes, semana) {
+    if (!mes) return Promise.resolve([]);
+    var porSemana = {};
+    estado.registros.filter(function (r) { return r.aba === aba && r.mes === mes.chave && Number(r.semana) < semana; })
+      .forEach(function (r) {
+        var atual = porSemana[r.semana];
+        if (!atual || String(r.criadoEm) > String(atual.criadoEm)) porSemana[r.semana] = r;
+      });
+    return Promise.all(Object.keys(porSemana).map(function (n) {
+      var reg = porSemana[n];
+      return estado.repo.lerBytes(reg.caminhoGerado).then(function (bytes) {
+        return bytes ? { n: Number(n), registro: reg, wb: window.XLSX.read(bytes, { type: 'array', cellDates: true }) } : null;
+      });
+    })).then(function (l) { return l.filter(Boolean); });
+  }
+
   /** Lê o arquivo, confere, gera e salva. Devolve true se deu certo. */
   function enviarArquivo(aba, arq, semana) {
     var passo = passoDe(aba), resultado;
     passo('Lendo e conferindo "' + arq.name + '"…');
+    var sem = semanaDoEnvio(semana), buffer;
     return concluir(aba, arq.arrayBuffer().then(function (buf) {
+      buffer = buf;
+      passo('Juntando as semanas anteriores do mês…');
+      return carregarAnteriores(aba, R.mesDoNome(arq.name), sem);
+    }).then(function (anteriores) {
+      var buf = buffer;
+      passo('Conferindo "' + arq.name + '" (Semana ' + sem + ')…');
       return esperarTela().then(function () {
-        resultado = P.processar(aba, arq.name, buf, semana);
+        resultado = P.processar(aba, arq.name, buf, sem, anteriores);
         conferirAlvo(aba, resultado);
         resultado.original = new Uint8Array(buf);
         passo('Salvando a planilha enviada e a gerada…');
@@ -271,11 +298,17 @@
   function enviarLink(aba, link, semana) {
     var passo = passoDe(aba), resultado;
     passo('Lendo a planilha no Google Planilhas…');
+    var sem = semanaDoEnvio(semana), planilha;
     return concluir(aba, window.Google.lerPlanilha(link, estado.chaveGoogle).then(function (g) {
-      passo('Conferindo "' + g.titulo + '"…');
+      planilha = g;
+      passo('Juntando as semanas anteriores do mês…');
+      return carregarAnteriores(aba, R.mesDoNome(g.titulo), sem);
+    }).then(function (anteriores) {
+      var g = planilha;
+      passo('Conferindo "' + g.titulo + '" (Semana ' + sem + ')…');
       return esperarTela().then(function () {
         var wb = P.livroDeAbas(g.nomesAbas, g.abas);
-        resultado = P.processarLivro(aba, g.titulo, wb, semana);
+        resultado = P.processarLivro(aba, g.titulo, wb, sem, anteriores);
         conferirAlvo(aba, resultado);
         resultado.original = P.gravar(wb);
         passo('Salvando a cópia (Excel) da planilha como estava e a planilha gerada…');
@@ -337,7 +370,8 @@
     var ult = r.semanas[r.semanas.length - 1];
     var registro = {
       id: id, criadoEm: agora.toISOString(), usuario: estado.nome, aba: aba, mes: r.mes.chave, mesRotulo: r.mes.rotulo,
-      semana: ult.n, semanas: r.semanas.map(function (s) { return s.n; }).join(', '),
+      semana: ult.n, semanas: (r.semanasNoArquivo || r.semanas.map(function (s) { return s.n; })).join(', '),
+      abaOrigem: r.abaOrigem || '', faturasDoMes: ult.faturasDoMes == null ? null : ult.faturasDoMes,
       nomeOrigem: nomeArquivo, caminhoOrigem: caminhoOrigem, linkOrigem: linkOrigem || '', nomeGerado: r.nomeGerado, caminhoGerado: caminhoGerado,
       total: ult.total, comFatura: ult.comFatura, semFatura: ult.pendentes.length
     };
