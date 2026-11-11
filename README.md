@@ -1,4 +1,17 @@
-# WattWise · Faturas e Contratos
+# Faturas e Contratos · código da página
+
+Página **Faturas e Contratos** da [Plataforma](https://danielamotaxp-code.github.io/central-atendimento/#faturas). Ela abre dentro do portal, com o login, as permissões e as cores de lá.
+
+| | |
+|---|---|
+| Endereço | [https://danielamotaxp-code.github.io/central-atendimento/#faturas](https://danielamotaxp-code.github.io/central-atendimento/#faturas) (o endereço antigo deste repositório redireciona para lá) |
+| Página | `app.html` (código público, sem dados de clientes) |
+| Dados | repositório privado `faturas-contratos-acessos` |
+| Ligação com o portal | `<script src="/central-atendimento/kit/modulo.js" data-modulo="faturas">` no início do `app.html` |
+| Cores | `embutido.css` (WeGen verde, SmartBen azul, WattWise rosa) |
+
+<!-- detalhes -->
+## Detalhes da versão anterior
 
 Plataforma interna da WattWise para conferir, toda semana, quais clientes estão sem fatura gerada.
 
