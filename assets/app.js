@@ -818,7 +818,8 @@
   // Formato das abas da planilha de ouvidorias (uma aba por data). As 4 últimas colunas a plataforma vai atualizando.
   var COLS_OUV = ['Colaborador', 'Cliente', 'Usina', 'Instalação', 'Unid. Consumidora', 'Mês Referencia', 'CPF / CNPJ', 'Data Vencimento Boleto',
     'Parceiro', 'Associado', 'Status Contrato Faturamento', 'Status Contrato Atual', 'Modalidade da Fatura', 'Status da Fatura', 'Geração de Faturas', 'Classificação'];
-  var COLS_AUTO = ['Ouvidoria', 'Protocolo da ouvidoria', 'Data da ouvidoria'];
+  var COLS_AUTO = ['Ouvidoria', 'Protocolo da ouvidoria', 'Data da ouvidoria', 'Ouvidoria na plataforma'];
+  var PORTAL_OUV = 'https://danielamotaxp-code.github.io/central-atendimento/#ouvidorias/cad/';
   var ouv = { dados: null, previa: null, regs: null, filtro: {} };
   function hojeISO() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function isoParaBR(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : iso; }
@@ -871,7 +872,7 @@
     var usar = COLS_OUV.map(function (nome, i) { return { nome: nome, i: idx[i] }; })
       .filter(function (o) { return o.i >= 0 || o.nome === 'Colaborador' || o.nome === 'Classificação'; });
     return { cab: usar.map(function (o) { return o.nome; }).concat(COLS_AUTO),
-      linhas: linhas.map(function (l) { return usar.map(function (o) { return o.i >= 0 ? (l[o.i] || '') : ''; }).concat(['', '', '']); }),
+      linhas: linhas.map(function (l) { return usar.map(function (o) { return o.i >= 0 ? (l[o.i] || '') : ''; }).concat(COLS_AUTO.map(function () { return ''; })); }),
       descartadas: t.linhas.length - linhas.length };
   }
   function colunasOuv(cab) {
@@ -894,7 +895,7 @@
   function mostrarPrevia(t) {
     ouv.previa = t;
     var box = $('#ouv-previa');
-    if (!t) { box.innerHTML = $('#ouv-colar').value.trim() ? '<p class="erro">Não achei o cabeçalho (coluna "Cliente" ou "Instalação"). Copie as linhas junto com o cabeçalho.</p>' : ''; $('#ouv-salvar').disabled = true; return; }
+    if (!t) { box.innerHTML = arguments.length ? '<p class="erro">Não achei o cabeçalho (coluna "Cliente" ou "Instalação") na planilha.</p>' : ''; $('#ouv-salvar').disabled = true; return; }
     var c = colunasOuv(t.cab);
     var faltam = [c.cliente < 0 && 'Cliente', c.inst < 0 && 'Instalação'].filter(Boolean);
     box.innerHTML = '<div class="ouv-resumo"><span class="ouv-chip"><b>' + num(t.linhas.length) + '</b> clientes</span>' + chips(contar(t.linhas, c.classif)) + '</div>' +
@@ -916,18 +917,17 @@
         var c = colunasOuv(t.cab), q = c.classif >= 0 ? t.linhas.filter(function (l) { return l[c.classif]; }).length : 0;
         if (!melhor || q > melhor.q || (q === melhor.q && g.nomesAbas.indexOf(n) > g.nomesAbas.indexOf(melhor.n))) melhor = { n: n, t: t, q: q };
       });
-      $('#ouv-colar').value = ''; $('#ouv-arquivo').value = '';
+      $('#ouv-arquivo').value = '';
       mostrarPrevia(melhor ? paraFormatoOuv(melhor.t) : null);
       if (melhor) $('#ouv-previa').insertAdjacentHTML('afterbegin', '<p class="dica">Aba lida: <b>' + esc(melhor.n) + '</b></p>');
     }).catch(function (e) { $('#ouv-previa').innerHTML = '<p class="erro">' + esc(e.message) + '</p>'; })
       .then(function () { btn.disabled = false; });
   });
-  $('#ouv-colar').addEventListener('input', function () { $('#ouv-arquivo').value = ''; mostrarPrevia(paraFormatoOuv(lerTabelaColada(this.value))); });
   $('#ouv-arquivo').addEventListener('change', function () {
     var f = this.files[0]; if (!f) return;
     f.arrayBuffer().then(function (buf) {
       var wb = window.Planilhas.lerArquivo(f.name, buf), ws = wb.Sheets[wb.SheetNames[0]];
-      $('#ouv-colar').value = '';
+      $('#ouv-link').value = '';
       mostrarPrevia(paraFormatoOuv(limparTabela(window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }))));
     }).catch(function (e) { $('#ouv-previa').innerHTML = '<p class="erro">Não consegui ler o arquivo: ' + esc(e.message) + '</p>'; });
   });
@@ -980,7 +980,7 @@
     var t = ouv.previa, btn = this, msg = $('#ouv-msg');
     if (!t) return;
     var iso = $('#ouv-data').value || hojeISO();
-    var lista = { id: carimbo(new Date()), dataISO: iso, data: isoParaBR(iso), protocolo: $('#ouv-prot').value.trim(),
+    var lista = { id: carimbo(new Date()), dataISO: iso, data: isoParaBR(iso),
       cab: t.cab, linhas: t.linhas, usuario: estado.nome, criadoEm: new Date().toISOString() };
     btn.disabled = true; msg.textContent = 'Salvando a lista…';
     salvarOuv(function (d) { d.listas.push(lista); return d; }, 'Ouvidorias: lista de ' + lista.data)
@@ -990,7 +990,7 @@
         return criarAbaGoogle(lista).then(function () { msg.textContent = 'Lista salva e aba criada na planilha ✓'; })
           .catch(function (e) { msg.textContent = 'Lista salva, mas não consegui criar a aba: ' + e.message; });
       })
-      .then(function () { $('#ouv-colar').value = ''; $('#ouv-arquivo').value = ''; $('#ouv-prot').value = ''; mostrarPrevia(null); renderOuv(); })
+      .then(function () { $('#ouv-link').value = ''; $('#ouv-arquivo').value = ''; mostrarPrevia(); renderOuv(); })
       .catch(function (e) { msg.textContent = 'Não consegui salvar: ' + e.message; btn.disabled = false; });
   });
 
@@ -1001,32 +1001,50 @@
     return rs.filter(function (r) { return r.status !== 'pendente'; })[0] || rs[0];
   }
   function letraCol(n) { var s = ''; n++; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
-  /** Atualiza na planilha de ouvidorias as colunas Colaborador, Ouvidoria, Protocolo e Data, conforme as ouvidorias geradas. */
+  /**
+   * Atualiza a aba de cada lista na planilha de ouvidorias, conforme as ouvidorias registradas em Ouvidorias Cemig:
+   * Colaborador (quem registrou, se estiver vazio), situação, protocolo, data, link "Abrir ouvidoria" e a linha em verde.
+   */
   var sincronizando = false;
+  var VERDE = { red: 0.204, green: 0.659, blue: 0.325 }, LARANJA = { red: 0.992, green: 0.851, blue: 0.663 };
   function sincronizarPlanilhaOuv(manual) {
     var listas = ((ouv.dados && ouv.dados.listas) || []).filter(function (l) { return l.aba; });
     if (sincronizando || !listas.length || !window.Google.conectado()) return Promise.resolve(false);
     sincronizando = true;
     return window.Google.lerPlanilha(linkPlanilhaOuv(), estado.chaveGoogle).then(function (g) {
-      var dados = [];
+      var dados = [], formatos = [];
       listas.forEach(function (l) {
-        var m = g.abas[l.aba]; if (!m || !m.length) return;
-        var cab = m[0].map(function (h) { return nrm(h); }), ci = cab.indexOf(nrm('Instalação')), cc = cab.indexOf('colaborador');
-        var cs = [nrm('Ouvidoria'), nrm('Protocolo da ouvidoria'), nrm('Data da ouvidoria')].map(function (h) { return cab.indexOf(h); });
-        if (ci < 0) return;
-        m.slice(1).forEach(function (linha, j) {
+        var m = g.abas[l.aba], folha = g.folhas[l.aba]; if (!m || !m.length || !folha) return;
+        var hl = m.findIndex(function (row) { return (row || []).some(function (h) { return nrm(h) === nrm('Instalação'); }); });
+        if (hl < 0) return;
+        var cab = m[hl].map(function (h) { return nrm(h); }), ci = cab.indexOf(nrm('Instalação')), cc = cab.indexOf('colaborador');
+        var cs = COLS_AUTO.map(function (h) { return cab.indexOf(nrm(h)); });
+        var ultimaCol = cab.length;
+        m.slice(hl + 1).forEach(function (linha, j) {
           var r = regOuv(linha[ci], l.dataISO); if (!r) return;
-          var lin = j + 2, quem = r.responsavel || '';
-          var val = [r.status === 'pendente' ? 'Não enviada (problema no site)' : 'Enviada', r.status === 'pendente' ? '' : (r.protocolo || ''),
-            isoParaBR(String((r.status === 'pendente' ? r.ultimaTentativa : r.dataAbertura) || r.criadoEm || '').slice(0, 10))];
-          if (cc >= 0 && !String(linha[cc] || '').trim() && quem) dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(cc) + lin, values: [[quem]] });
-          cs.forEach(function (c, k) { if (c >= 0 && String(linha[c] == null ? '' : linha[c]) !== val[k]) dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(c) + lin, values: [[val[k]]] }); });
+          var lin = hl + j + 2, quem = r.responsavel || '', pend = r.status === 'pendente';
+          var val = [pend ? 'Não enviada (problema no site)' : 'Enviada', pend ? '' : (r.protocolo || ''),
+            isoParaBR(String((pend ? r.ultimaTentativa : r.dataAbertura) || r.criadoEm || '').slice(0, 10))];
+          var mudou = false;
+          if (cc >= 0 && !String(linha[cc] || '').trim() && quem) { dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(cc) + lin, values: [[quem]] }); mudou = true; }
+          val.forEach(function (v, k) { var c = cs[k]; if (c >= 0 && String(linha[c] == null ? '' : linha[c]) !== v) { dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(c) + lin, values: [[v]] }); mudou = true; } });
+          var cl = cs[3];
+          if (cl >= 0 && String(linha[cl] || '') !== 'Abrir ouvidoria') {
+            formatos.push({ updateCells: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: cl, endColumnIndex: cl + 1 },
+              rows: [{ values: [{ userEnteredValue: { stringValue: 'Abrir ouvidoria' }, textFormatRuns: [{ startIndex: 0, format: { link: { uri: PORTAL_OUV + r.id } } }] }] }],
+              fields: 'userEnteredValue,textFormatRuns' } });
+            mudou = true;
+          }
+          if (mudou) formatos.push({ repeatCell: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: 0, endColumnIndex: ultimaCol },
+            cell: { userEnteredFormat: { backgroundColor: pend ? LARANJA : VERDE } }, fields: 'userEnteredFormat.backgroundColor' } });
         });
       });
-      return window.Google.gravarIntervalos(g.id, dados).then(function () {
-        if (manual) avisar(dados.length ? 'Planilha de ouvidorias atualizada.' : 'A planilha de ouvidorias já estava em dia.');
-        return true;
-      });
+      return window.Google.gravarIntervalos(g.id, dados)
+        .then(function () { return formatos.length ? window.Google.lote(g.id, formatos) : null; })
+        .then(function () {
+          if (manual) avisar(dados.length || formatos.length ? 'Planilha de ouvidorias atualizada.' : 'A planilha de ouvidorias já estava em dia.');
+          return true;
+        });
     }).catch(function (e) { if (manual) avisar('Não consegui atualizar a planilha de ouvidorias: ' + e.message); return false; })
       .then(function (x) { sincronizando = false; return x; });
   }
@@ -1051,7 +1069,7 @@
       return '<details class="card ouv-lista"' + (li === 0 ? ' open' : '') + '><summary>' +
         '<h3>Lista de ' + esc(l.data) + '</h3><span class="ouv-chip"><b>' + num(l.linhas.length) + '</b> clientes</span>' +
         '<span class="ouv-chip" style="background:#e7f4ec;color:#1d5a37">' + num(feitos) + ' com ouvidoria enviada</span>' +
-        '<span class="dica">por ' + esc(l.usuario || '') + (l.protocolo ? ' · protocolo do dia ' + esc(l.protocolo) : '') + '</span>' +
+        '<span class="dica">por ' + esc(l.usuario || '') + '</span>' +
         '<span class="acoes">' + (l.aba ? '<a class="btn btn-peq" href="' + abaLink + '" target="_blank" rel="noopener">Abrir aba "' + esc(l.aba) + '"</a>'
           : '<button class="btn btn-peq" type="button" data-criar="' + esc(l.id) + '">Criar aba na planilha</button>') +
         '<button class="btn btn-link btn-peq" type="button" data-excluir="' + esc(l.id) + '">Excluir lista</button></span></summary>' +
@@ -1064,7 +1082,7 @@
           return '<tr>' + (c.colab >= 0 ? '<td>' + esc(x[c.colab] || (rg && rg.responsavel) || '') + '</td>' : '') + '<td class="cl">' + esc(x[c.cliente]) + '</td><td>' + esc(x[c.inst]) + '</td><td>' + esc(c.uc >= 0 ? x[c.uc] : '') + '</td>' +
             (c.classif >= 0 ? '<td class="cl">' + esc(x[c.classif]) + '</td>' : '') +
             '<td>' + (s ? '<span class="ouv-sit ' + s.cls + '">' + esc(s.txt) + '</span>' : '<span class="ouv-sit nao">Não gerada</span>') + '</td>' +
-            '<td><button class="btn btn-peq btn-primario" type="button" data-gerar="' + esc(l.id) + ':' + o.i + '">Gerar ouvidoria</button></td></tr>';
+            '<td>' + (rg ? '<button class="btn btn-peq" type="button" data-abrir="' + esc(rg.id) + '">Abrir ouvidoria</button>' : '') + '</td></tr>';
         }).join('') + '</tbody></table></div></details>';
     }).join('');
     $$('[data-busca]', box).forEach(function (inp) {
@@ -1086,15 +1104,10 @@
         salvarOuv(function (d) { d.listas = d.listas.filter(function (x) { return x.id !== b.dataset.excluir; }); return d; }, 'Ouvidorias: lista excluída').then(renderOuv);
       };
     });
-    $$('[data-gerar]', box).forEach(function (b) {
+    $$('[data-abrir]', box).forEach(function (b) {
       b.onclick = function () {
-        var p = b.dataset.gerar.split(':'), l = ouv.dados.listas.filter(function (x) { return x.id === p[0]; })[0], x = l.linhas[+p[1]], c = colunasOuv(l.cab);
-        var doc = String(c.doc >= 0 ? x[c.doc] : '').replace(/\D/g, '');
-        var pre = { em: Date.now(), reclamacao: 6, lista: l.data,
-          valores: { nomeCliente: x[c.cliente] || '', instalacao: String(x[c.inst] || '').replace(/\D/g, ''), uc: c.uc >= 0 ? x[c.uc] : '', protocolo: l.protocolo || '', pessoa: doc.length > 11 ? 'PJ' : 'PF' } };
-        try { localStorage.setItem('ouv_prefill', JSON.stringify(pre)); } catch (err) { avisar('O navegador bloqueou a passagem dos dados.'); return; }
-        if (window.PLAT) { try { window.top.location.hash = '#ouvidorias'; } catch (err) { window.open('/central-atendimento/#ouvidorias', '_blank'); } }
-        else window.open('/central-atendimento/#ouvidorias', '_blank');
+        if (window.PLAT) { try { window.top.location.hash = '#ouvidorias/cad/' + b.dataset.abrir; return; } catch (err) { /* abre em outra aba */ } }
+        window.open(PORTAL_OUV + b.dataset.abrir, '_blank');
       };
     });
   }

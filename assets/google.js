@@ -194,6 +194,6 @@
   }
 
   var api = { lerPlanilha: lerPlanilha, idDoLink: idDoLink, entrar: entrar, sair: sair, conectado: conectado,
-    pintarAba: pintarAba, escreverAba: escreverAba, filtrarAbas: filtrarAbas, gravarIntervalos: gravarIntervalos, aspas: aspas };
+    pintarAba: pintarAba, escreverAba: escreverAba, filtrarAbas: filtrarAbas, gravarIntervalos: gravarIntervalos, aspas: aspas, lote: lote, corRGB: corRGB };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Google = api;
 })(this);

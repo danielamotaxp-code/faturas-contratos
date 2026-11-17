@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WattWise · Faturas e Contratos</title>
-  <link rel="stylesheet" href="assets/style.css?v=202611171530">
+  <link rel="stylesheet" href="assets/style.css?v=202611171600">
   <link rel="stylesheet" href="assets/embutido.css?v=1">
 </head>
 <body>
@@ -97,19 +97,17 @@
       <section class="painel" data-painel="ouvidorias" hidden>
         <div class="card">
           <div class="card-titulo"><span class="selo">O</span><h2>Ouvidorias das faturas (Reclamação 6)</h2></div>
-          <p class="ajuda">Processo: 1) gerar Faturas Pendentes e Contratos sem Faturas; 2) a Paula ou a Ytala auditam, e as faturas são lançadas manualmente ou classificadas como sem saldo de geração; 3) aqui, a planilha auditada vira uma aba com a data na planilha de ouvidorias; 4) o botão <b>Gerar ouvidoria</b> abre a Reclamação 6 já preenchida, e a aba vai se atualizando com o colaborador, a situação e o protocolo de cada ouvidoria.</p>
+          <p class="ajuda">Processo: 1) gerar Faturas Pendentes e Contratos sem Faturas; 2) a Paula ou a Ytala auditam, e as faturas são lançadas manualmente ou classificadas como sem saldo de geração; 3) aqui, a planilha auditada vira uma aba com a data na planilha de ouvidorias; 4) quando alguém registra a ouvidoria do cliente em Ouvidorias Cemig, a linha dele nessa aba é atualizada sozinha: colaborador, situação, protocolo, linha em verde e o link <b>Abrir ouvidoria</b> para ver o cadastro na plataforma.</p>
           <div class="ouv-planilha" id="ouv-planilha"></div>
         </div>
         <div class="card" style="margin-top:14px">
           <div class="card-titulo"><span class="selo">+</span><h3>Nova lista de ouvidorias</h3></div>
-          <p class="ajuda">Coloque a planilha <b>auditada</b> (depois de gerar as faturas e classificar na última coluna: lançamento manual do boleto ou sem saldo de geração). Pode ser pelo link do Google, por arquivo .xlsx/.csv ou colando as linhas com o cabeçalho. A plataforma pega só quem foi classificado, monta a aba no formato da planilha de ouvidorias, com a coluna <b>Colaborador</b>, e cria a aba com a data.</p>
+          <p class="ajuda">Coloque a planilha <b>auditada</b> (depois de gerar as faturas e classificar na última coluna: lançamento manual do boleto ou sem saldo de geração). Pode ser pelo link do Google Planilhas ou pelo arquivo do Excel. A plataforma pega só quem foi classificado e cria, na planilha de ouvidorias (sempre a mesma), uma <b>aba nova com a data</b>, com a coluna <b>Colaborador</b>.</p>
           <div class="ouv-form"><input type="url" id="ouv-link" class="campo campo-link" placeholder="Link da planilha auditada (Google Planilhas)"><button class="btn" type="button" id="ouv-ler-link">Ler planilha</button></div>
           <div class="ouv-form">
             <label>Data da lista <input type="date" id="ouv-data" class="campo"></label>
-            <label>Protocolo genérico do dia <small>(opcional)</small> <input type="text" id="ouv-prot" class="campo" placeholder="Usado em todas as ouvidorias desta lista"></label>
-            <label class="ouv-arq">ou arquivo <input type="file" id="ouv-arquivo" accept=".xlsx,.xls,.csv"></label>
+            <label class="ouv-arq">ou arquivo do Excel <input type="file" id="ouv-arquivo" accept=".xlsx,.xls,.csv"></label>
           </div>
-          <textarea id="ouv-colar" class="campo ouv-colar" rows="6" placeholder="ou cole aqui as linhas copiadas da planilha auditada (com o cabeçalho)"></textarea>
           <div id="ouv-previa"></div>
           <div class="filtros" style="margin-top:10px">
             <button class="btn btn-primario" id="ouv-salvar" type="button" disabled>Salvar lista e criar aba na planilha</button>
@@ -143,13 +141,13 @@
 
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="aviso" class="aviso" role="status" hidden></div>
-  <script src="assets/vendor/cpexcel.js?v=202611171530"></script>
-  <script src="assets/vendor/xlsx.bundle.js?v=202611171530"></script>
-  <script src="assets/regras.js?v=202611171530"></script>
-  <script src="assets/planilhas.js?v=202611171530"></script>
-  <script src="assets/armazenamento.js?v=202611171530"></script>
-  <script src="assets/google.js?v=202611171530"></script>
+  <script src="assets/vendor/cpexcel.js?v=202611171600"></script>
+  <script src="assets/vendor/xlsx.bundle.js?v=202611171600"></script>
+  <script src="assets/regras.js?v=202611171600"></script>
+  <script src="assets/planilhas.js?v=202611171600"></script>
+  <script src="assets/armazenamento.js?v=202611171600"></script>
+  <script src="assets/google.js?v=202611171600"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="assets/app.js?v=202611171530"></script>
+  <script src="assets/app.js?v=202611171600"></script>
 </body>
 </html>
