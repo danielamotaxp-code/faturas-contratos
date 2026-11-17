@@ -994,8 +994,11 @@
       .catch(function (e) { msg.textContent = 'Não consegui salvar: ' + e.message; btn.disabled = false; });
   });
 
+  // ouvidorias feitas até 7 dias antes da data da lista também contam (a auditoria e as ouvidorias podem começar antes da aba ser criada)
+  function seteDiasAntes(iso) { var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); }
   function regOuv(inst, desde) {
     var k = R.chaveInstalacao(inst); if (!k || !ouv.regs) return null;
+    desde = seteDiasAntes(desde);
     var rs = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && String(r.criadoEm || '').slice(0, 10) >= desde; });
     if (!rs.length) return null;
     return rs.filter(function (r) { return r.status !== 'pendente'; })[0] || rs[0];
@@ -1050,9 +1053,8 @@
   }
 
   function situacaoOuv(inst, desde) {
-    var k = R.chaveInstalacao(inst); if (!k || !ouv.regs) return null;
-    var rs = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && String(r.criadoEm || '').slice(0, 10) >= desde; });
-    if (!rs.length) return null;
+    var r0 = regOuv(inst, desde); if (!r0) return null;
+    var rs = [r0];
     var env = rs.filter(function (r) { return r.status !== 'pendente'; })[0];
     return env ? { cls: 'ok', txt: 'Enviada' + (env.protocolo ? ' · ' + env.protocolo : '') } : { cls: 'pend', txt: 'Não enviada (problema no site)' };
   }
