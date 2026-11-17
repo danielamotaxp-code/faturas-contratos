@@ -994,13 +994,14 @@
       .catch(function (e) { msg.textContent = 'Não consegui salvar: ' + e.message; btn.disabled = false; });
   });
 
-  // ouvidorias feitas até 7 dias antes da data da lista também contam (a auditoria e as ouvidorias podem começar antes da aba ser criada)
-  function seteDiasAntes(iso) { var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); }
+  // ouvidorias feitas até 3 dias antes da data da lista também contam (as ouvidorias podem começar antes da aba ser criada)
+  function seteDiasAntes(iso) { var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() - 3); return d.toISOString().slice(0, 10); }
   function regOuv(inst, desde) {
     var k = R.chaveInstalacao(inst); if (!k || !ouv.regs) return null;
     desde = seteDiasAntes(desde);
     var rs = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && String(r.criadoEm || '').slice(0, 10) >= desde; });
     if (!rs.length) return null;
+    rs.sort(function (a, b) { return String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')); }); // a mais recente
     return rs.filter(function (r) { return r.status !== 'pendente'; })[0] || rs[0];
   }
   function letraCol(n) { var s = ''; n++; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
