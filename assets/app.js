@@ -335,6 +335,9 @@
       ? window.Google.pintarAba(g, x.aba, x.colunas, x.indices, x.cores)
       : window.Google.escreverAba(g, x.titulo, x.valores);
     return escrita.then(function () {
+      passo('Colocando o filtro de desconectados e inativos na planilha do Google…');
+      return window.Google.filtrarAbas(g, x.filtros).catch(function () { /* sem o filtro, o resto continua valendo */ });
+    }).then(function () {
       reg.googleAtualizada = aba === 'faturas' ? 'Aba "' + x.aba + '" pintada' : 'Aba "' + x.titulo + '" criada';
       return estado.repo.atualizarJSON(ARQ_INDICE, { registros: [] }, function (ind) {
         (ind.registros || []).forEach(function (r) { if (r.id === reg.id) r.googleAtualizada = reg.googleAtualizada; });
@@ -351,6 +354,7 @@
       var reg = par[0]; resultado = par[1];
       var st = mostrarStatus(aba, 'ok', '<b>' + esc(reg.nomeGerado) + '</b> gerada. Semana ' + esc(reg.semana) + ': ' +
         num(reg.semFatura) + ' ' + t.rotSem + ' de ' + num(reg.total) + ' ' + t.rotTotal + '. ' +
+        (reg.desconsiderados ? '<br>' + num(reg.desconsiderados) + (aba === 'faturas' ? ' instalações' : ' contratos') + ' desconectados ou inativos ficaram de fora. ' : '') +
         '<button class="btn btn-peq btn-primario" type="button">Baixar planilha gerada</button>' +
         (reg.googleAtualizada ? '<br>✔ Planilha do Google atualizada no mesmo link: ' + esc(reg.googleAtualizada) + '. <a href="' + esc(reg.linkOrigem) + '" target="_blank" rel="noopener">Abrir no Google</a>' : '') +
         (reg.avisoGoogle ? '<br><span class="aviso-google">' + esc(reg.avisoGoogle) + '</span>' : ''));
@@ -377,7 +381,8 @@
       semana: ult.n, semanas: (r.semanasNoArquivo || r.semanas.map(function (s) { return s.n; })).join(', '),
       abaOrigem: r.abaOrigem || '', faturasDoMes: ult.faturasDoMes == null ? null : ult.faturasDoMes,
       nomeOrigem: nomeArquivo, caminhoOrigem: caminhoOrigem, linkOrigem: linkOrigem || '', nomeGerado: r.nomeGerado, caminhoGerado: caminhoGerado,
-      total: ult.total, comFatura: ult.comFatura, semFatura: ult.pendentes.length
+      total: ult.total, comFatura: ult.comFatura, semFatura: ult.pendentes.length,
+      desconsiderados: ult.desconsiderados || 0
     };
     var msg = r.nomeGerado + ' (' + estado.nome + ')';
     return repo.gravarBytes(caminhoOrigem, r.original, 'Enviada: ' + nomeArquivo + ' (' + estado.nome + ')')

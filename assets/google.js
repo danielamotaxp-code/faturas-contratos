@@ -173,7 +173,21 @@
       });
   }
 
+  /** Filtro na própria aba do Google: esconde as linhas de desconectados e inativos (o filtro pode ser desligado na planilha). */
+  function filtrarAbas(planilha, filtros) {
+    var pedidos = [];
+    (filtros || []).forEach(function (f) {
+      var folha = planilha.folhas[f.aba];
+      if (!folha || !f.ocultar || !f.ocultar.length) return;
+      pedidos.push({ setBasicFilter: { filter: {
+        range: { sheetId: folha.sheetId },
+        filterSpecs: f.ocultar.map(function (o) { return { columnIndex: o.coluna, filterCriteria: { hiddenValues: o.valores } }; })
+      } } });
+    });
+    return pedidos.length ? lote(planilha.id, pedidos) : Promise.resolve();
+  }
+
   var api = { lerPlanilha: lerPlanilha, idDoLink: idDoLink, entrar: entrar, sair: sair, conectado: conectado,
-    pintarAba: pintarAba, escreverAba: escreverAba };
+    pintarAba: pintarAba, escreverAba: escreverAba, filtrarAbas: filtrarAbas };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Google = api;
 })(this);

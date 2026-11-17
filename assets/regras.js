@@ -139,6 +139,41 @@
     return { linhas: L, indices: I, janela: janela, removidas: linhas.length - L.length };
   }
 
+  /**
+   * Desconectados e inativos não entram na conferência.
+   * Faturas: coluna "Status Contrato Atual" (se não houver, "Status contrato"). Contratos: "Status contrato" e "Situação Contrato".
+   * Se a instalação aparece como desconectada/inativa em alguma linha, todas as linhas dela saem.
+   */
+  function colunasStatus(cab) {
+    var cols = [], atual = coluna(cab, [/status\s*(do\s*)?contrato\s*atual/]);
+    if (atual >= 0) cols.push(atual);
+    else { var st = coluna(cab, [/^status\s*(do\s*)?contrato$/, /^status\s*(do\s*)?contrato/]); if (st >= 0) cols.push(st); }
+    var sit = coluna(cab, [/situacao\s*(do\s*)?contrato/]);
+    if (sit >= 0 && cols.indexOf(sit) < 0) cols.push(sit);
+    return cols;
+  }
+  function statusExcluido(v) { return /^(desconectad[oa]|inativ[oa])s?$/.test(normalizar(v)); }
+  function filtrarStatus(cab, linhas, indices) {
+    var cols = colunasStatus(cab);
+    var ci = coluna(cab, [/numero\s*(da\s*)?instala/, /^instalacao$/, /instala/]);
+    var fora = {}, valores = {};
+    cols.forEach(function (c) { valores[c] = {}; });
+    linhas.forEach(function (l) {
+      cols.forEach(function (c) {
+        if (statusExcluido(l[c])) { valores[c][texto(l[c])] = true; var k = ci >= 0 ? chaveInstalacao(l[ci]) : ''; if (k) fora[k] = true; }
+      });
+    });
+    var L = [], I = [], instal = {};
+    linhas.forEach(function (l, i) {
+      var k = ci >= 0 ? chaveInstalacao(l[ci]) : '';
+      var sai = (k && fora[k]) || cols.some(function (c) { return statusExcluido(l[c]); });
+      if (sai) { if (k) instal[k] = true; return; }
+      L.push(l); I.push(indices ? indices[i] : i);
+    });
+    return { linhas: L, indices: I, removidas: linhas.length - L.length, instalacoes: Object.keys(instal).length,
+      ocultar: cols.map(function (c) { return { coluna: c, valores: Object.keys(valores[c]) }; }).filter(function (x) { return x.valores.length; }) };
+  }
+
   function numeroSemana(nome) {
     var m = /semana\s*(\d+)/.exec(normalizar(nome));
     return m ? Number(m[1]) : null;
@@ -372,6 +407,7 @@
     corrigirDocumento: corrigirDocumento, codigoTexto: codigoTexto, historicoVigente: historicoVigente,
     semanaDaData: semanaDaData, abaFaturas: abaFaturas, abaContratos: abaContratos,
     mesesJanela: mesesJanela, filtrarUltimosMeses: filtrarUltimosMeses,
+    colunasStatus: colunasStatus, statusExcluido: statusExcluido, filtrarStatus: filtrarStatus,
     analisarFaturas: analisarFaturas, analisarContratos: analisarContratos, calcularProgresso: calcularProgresso
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Regras = api;

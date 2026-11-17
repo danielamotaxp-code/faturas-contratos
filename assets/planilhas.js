@@ -113,6 +113,7 @@
     lista.forEach(function (a) {
       var d = dadosDaAba(a.wb, 'Semana ' + a.n);
       if (!d.cab.length) return;
+      if (aba === 'faturas') d.linhas = R.filtrarStatus(d.cab, d.linhas).linhas; // desconectados e inativos não contam
       var an = aba === 'faturas' ? R.analisarFaturas(d.cab, d.linhas, mes.chave) : null;
       out.push({ n: a.n, ws: abaDeDados(d.cab, d.linhas, an ? an.cores : null), linhas: d.linhas.length,
         total: an ? an.total : a.registro.total, comFatura: an ? an.comFatura : a.registro.comFatura,
@@ -127,42 +128,50 @@
     var d = dadosDaAba(wb, nomeAba);
     var f = R.filtrarUltimosMeses(d.cab, d.linhas, d.indices, mes.chave);
     if (!f.linhas.length) throw new Error('A aba "' + nomeAba + '" não tem faturas de ' + f.janela.map(R.rotuloMes).join(', ') + '.');
+    var st = R.filtrarStatus(d.cab, f.linhas, f.indices); // desconectados e inativos ficam de fora
+    f.linhas = st.linhas; f.indices = st.indices;
     var a = R.analisarFaturas(d.cab, f.linhas, mes.chave);
-    var atual = { n: semana, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes, linhas: f.linhas.length, removidas: f.removidas };
+    var atual = { n: semana, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes, linhas: f.linhas.length, removidas: f.removidas,
+      desconsiderados: st.instalacoes };
     var prev = abasAnteriores(anteriores, semana, 'faturas', mes);
     var meses = f.janela.map(R.rotuloMes).join(', ');
 
     var out = X.utils.book_new();
-    var resumo = prev.map(function (p) { return ['Semana ' + p.n, meses, p.linhas, p.total, p.comFatura, p.semFatura, '']; })
-      .concat([['Semana ' + semana, meses, atual.linhas, atual.total, atual.comFatura, atual.pendentes.length, atual.removidas]]);
-    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Meses considerados', 'Linhas (faturas)', 'Instalações', 'Com fatura de ' + mes.rotulo, 'Sem fatura (gerar)', 'Linhas de outros meses (fora do filtro)'], resumo), 'Resumo');
+    var resumo = prev.map(function (p) { return ['Semana ' + p.n, meses, p.linhas, p.total, p.comFatura, p.semFatura, '', '']; })
+      .concat([['Semana ' + semana, meses, atual.linhas, atual.total, atual.comFatura, atual.pendentes.length, atual.removidas, st.instalacoes]]);
+    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Meses considerados', 'Linhas (faturas)', 'Instalações', 'Com fatura de ' + mes.rotulo, 'Sem fatura (gerar)', 'Linhas de outros meses (fora do filtro)', 'Desconectados/inativos (desconsiderados)'], resumo), 'Resumo');
     prev.forEach(function (p) { X.utils.book_append_sheet(out, p.ws, 'Semana ' + p.n); });
     X.utils.book_append_sheet(out, abaDeDados(d.cab, f.linhas, a.cores), 'Semana ' + semana);
     X.utils.book_append_sheet(out, abaSimples(['Instalação', 'Cliente', 'CPF/CNPJ', 'Detalhes'],
       a.pendentes.map(function (p) { return [p.instalacao, p.cliente, p.cpfCnpj, p.info]; })), 'Pendentes – Semana ' + semana);
     return { nomeGerado: 'Faturas Pendentes – ' + mes.rotulo + ' – Semana ' + semana, bytes: gravar(out), semanas: [atual],
       semanasNoArquivo: prev.map(function (p) { return p.n; }).concat([semana]), abaOrigem: nomeAba,
-      google: { aba: nomeAba, colunas: d.cab.length, indices: f.indices, cores: a.cores } };
+      google: { aba: nomeAba, colunas: d.cab.length, indices: f.indices, cores: a.cores,
+        filtros: [{ aba: nomeAba, ocultar: st.ocultar }] } };
   }
 
   /** ABA 2: gera "Contratos sem Faturas – <Mês> – Semana N". */
   function gerarContratos(wb, mes, semana, anteriores) {
     var par = R.abaContratos(wb.SheetNames, semana);
     var c = dadosDaAba(wb, par.c), f = dadosDaAba(wb, par.f);
+    var stC = R.filtrarStatus(c.cab, c.linhas), stF = R.filtrarStatus(f.cab, f.linhas, f.indices);
+    var desconsiderados = stC.removidas;
+    c.linhas = stC.linhas; // contratos desconectados ou inativos não entram na conferência
     var a = R.analisarContratos(c.cab, c.linhas, f.cab, f.linhas, mes.chave, par.c);
     var linhas = a.indices.map(function (i) { return c.linhas[i]; });
-    var atual = { n: semana, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes, faturasDoMes: a.faturasDoMes };
+    var atual = { n: semana, total: a.total, comFatura: a.comFatura, pendentes: a.pendentes, faturasDoMes: a.faturasDoMes, desconsiderados: desconsiderados };
     var prev = abasAnteriores(anteriores, semana, 'contratos', mes);
 
     var out = X.utils.book_new();
-    var resumo = prev.map(function (p) { return ['Semana ' + p.n, p.total, p.comFatura, p.semFatura, p.faturasDoMes == null ? '' : p.faturasDoMes]; })
-      .concat([['Semana ' + semana, atual.total, atual.comFatura, atual.pendentes.length, atual.faturasDoMes]]);
-    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Contratos vinculados', 'Com fatura de ' + mes.rotulo, 'Sem fatura', 'Faturas de ' + mes.rotulo + ' no gateway'], resumo), 'Resumo');
+    var resumo = prev.map(function (p) { return ['Semana ' + p.n, p.total, p.comFatura, p.semFatura, p.faturasDoMes == null ? '' : p.faturasDoMes, '']; })
+      .concat([['Semana ' + semana, atual.total, atual.comFatura, atual.pendentes.length, atual.faturasDoMes, desconsiderados]]);
+    X.utils.book_append_sheet(out, abaSimples(['Semana', 'Contratos vinculados', 'Com fatura de ' + mes.rotulo, 'Sem fatura', 'Faturas de ' + mes.rotulo + ' no gateway', 'Desconectados/inativos (desconsiderados)'], resumo), 'Resumo');
     prev.forEach(function (p) { X.utils.book_append_sheet(out, p.ws, 'Semana ' + p.n); });
     X.utils.book_append_sheet(out, abaDeDados(c.cab, linhas, null), 'Semana ' + semana);
     return { nomeGerado: 'Contratos sem Faturas – ' + mes.rotulo + ' – Semana ' + semana, bytes: gravar(out), semanas: [atual],
       semanasNoArquivo: prev.map(function (p) { return p.n; }).concat([semana]), abaOrigem: par.c + ' + ' + par.f,
-      google: { titulo: 'Contratos sem Fatura – Semana ' + semana, valores: [c.cab].concat(normalizarCodigos(c.cab, linhas)) } };
+      google: { titulo: 'Contratos sem Fatura – Semana ' + semana, valores: [c.cab].concat(normalizarCodigos(c.cab, linhas)),
+        filtros: [{ aba: par.c, ocultar: stC.ocultar }, { aba: par.f, ocultar: stF.ocultar }] } };
   }
 
   /**
