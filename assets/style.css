@@ -161,3 +161,28 @@ td.quebra { white-space: normal; min-width: 220px; }
 .btn-google { border-color: var(--azul-medio); color: var(--azul); }
 .btn-google.conectado { background: #e7f4ec; border-color: #9cd3b0; color: #1d5a37; }
 .aviso-google { color: #8a5300; }
+
+/* ===== aba Ouvidorias ===== */
+.ouv-planilha { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 10px; font-size: .92rem; }
+.ouv-planilha .campo { flex: 1 1 380px; }
+.ouv-form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin: 10px 0; }
+.ouv-form label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--texto-2); }
+.ouv-form label small { color: var(--texto-3); }
+.ouv-arq input { font-size: .85rem; }
+.ouv-colar { width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; font-size: .8rem; resize: vertical; }
+.ouv-resumo { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.ouv-chip { background: var(--azul-claro); color: var(--azul-escuro); border-radius: 999px; padding: 3px 10px; font-size: .8rem; }
+.ouv-chip.cinza { background: #eef0f3; color: var(--texto-2); }
+.ouv-lista { margin-bottom: 12px; }
+.ouv-lista summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; list-style: none; }
+.ouv-lista summary::-webkit-details-marker { display: none; }
+.ouv-lista summary h3 { margin: 0; font-size: 1.05rem; }
+.ouv-lista summary .dica { margin: 0; }
+.ouv-lista .acoes { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.ouv-tab td, .ouv-tab th { white-space: nowrap; }
+.ouv-tab td.cl { white-space: normal; min-width: 180px; }
+.ouv-sit { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: .78rem; font-weight: 600; }
+.ouv-sit.ok { background: #e7f4ec; color: #1d5a37; }
+.ouv-sit.pend { background: #fff4e6; color: #8a4b00; }
+.ouv-sit.nao { background: #eef0f3; color: var(--texto-2); }
+.ouv-filtro { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }

@@ -811,6 +811,296 @@
       .then(function () { btn.disabled = false; });
   });
 
+
+  /* ---------- aba Ouvidorias: listas de quem precisa de ouvidoria (Reclamação 6) ---------- */
+  var ARQ_OUV = 'dados/ouvidorias.json';
+  var PLANILHA_OUV_PADRAO = 'https://docs.google.com/spreadsheets/d/1T55s2hcu4n0_O50vk5ZKbidlbMpnwzs00btX-IMLQQ4/edit';
+  // Formato das abas da planilha de ouvidorias (uma aba por data). As 4 últimas colunas a plataforma vai atualizando.
+  var COLS_OUV = ['Colaborador', 'Cliente', 'Usina', 'Instalação', 'Unid. Consumidora', 'Mês Referencia', 'CPF / CNPJ', 'Data Vencimento Boleto',
+    'Parceiro', 'Associado', 'Status Contrato Faturamento', 'Status Contrato Atual', 'Modalidade da Fatura', 'Status da Fatura', 'Geração de Faturas', 'Classificação'];
+  var COLS_AUTO = ['Ouvidoria', 'Protocolo da ouvidoria', 'Data da ouvidoria'];
+  var ouv = { dados: null, previa: null, regs: null, filtro: {} };
+  function hojeISO() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function isoParaBR(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : iso; }
+  function nrm(x) { return R.normalizar(x); }
+
+  function lerTabelaColada(txt) {
+    var linhas = String(txt || '').replace(/\r/g, '').split('\n');
+    var tab = linhas.some(function (l) { return l.indexOf('\t') >= 0; });
+    var m = linhas.map(function (l) {
+      if (tab) return l.split('\t');
+      var out = [], cur = '', q = false; // CSV simples com aspas
+      for (var i = 0; i < l.length; i++) {
+        var c = l[i];
+        if (c === '"') { if (q && l[i + 1] === '"') { cur += '"'; i++; } else q = !q; }
+        else if (c === ',' && !q) { out.push(cur); cur = ''; } else cur += c;
+      }
+      out.push(cur); return out;
+    });
+    return limparTabela(m);
+  }
+  /** Acha o cabeçalho, tira colunas vazias e dá nome à coluna da classificação (que costuma vir sem título). */
+  function limparTabela(m) {
+    m = (m || []).map(function (l) { return (l || []).map(function (c) { return c == null ? '' : (c instanceof Date ? c.toLocaleDateString('pt-BR') : String(c).trim()); }); })
+      .filter(function (l) { return l.some(function (c) { return c !== ''; }); });
+    var h = m.findIndex(function (l) { return l.some(function (c) { return /^cliente$|instala/.test(nrm(c)); }); });
+    if (h < 0) return null;
+    var cab = m[h], corpo = m.slice(h + 1), n = Math.max.apply(null, m.map(function (l) { return l.length; }));
+    var usar = [];
+    for (var c = 0; c < n; c++) {
+      var temCab = (cab[c] || '') !== '', temDado = corpo.some(function (l) { return (l[c] || '') !== ''; });
+      if (temCab || temDado) usar.push(c);
+    }
+    var ultimaSemNome = usar.filter(function (c) { return !(cab[c] || ''); }).pop();
+    var novoCab = usar.map(function (c, i) { return cab[c] || (c === ultimaSemNome ? 'Classificação' : 'Coluna ' + (i + 1)); });
+    var linhas = corpo.map(function (l) { return usar.map(function (c) { return l[c] || ''; }); })
+      .filter(function (l) { return l.some(function (x) { return x !== ''; }); });
+    return { cab: novoCab, linhas: linhas };
+  }
+  /** Planilha auditada → formato da aba de ouvidorias: só quem foi classificado, colunas na ordem certa. */
+  function paraFormatoOuv(t) {
+    if (!t) return null;
+    var c = colunasOuv(t.cab);
+    var linhas = t.linhas;
+    if (c.classif >= 0 && linhas.some(function (l) { return l[c.classif]; })) linhas = linhas.filter(function (l) { return l[c.classif]; });
+    var idx = COLS_OUV.map(function (nome) {
+      if (nome === 'Classificação') return c.classif;
+      if (nome === 'Colaborador') return c.colab;
+      var n = nrm(nome); return t.cab.findIndex(function (h) { return nrm(h) === n; });
+    });
+    var usar = COLS_OUV.map(function (nome, i) { return { nome: nome, i: idx[i] }; })
+      .filter(function (o) { return o.i >= 0 || o.nome === 'Colaborador' || o.nome === 'Classificação'; });
+    return { cab: usar.map(function (o) { return o.nome; }).concat(COLS_AUTO),
+      linhas: linhas.map(function (l) { return usar.map(function (o) { return o.i >= 0 ? (l[o.i] || '') : ''; }).concat(['', '', '']); }),
+      descartadas: t.linhas.length - linhas.length };
+  }
+  function colunasOuv(cab) {
+    var col = function (re) { return R.coluna(cab, re); };
+    return { colab: col([/colaborador/, /responsavel/]), cliente: col([/^cliente$/, /^cliente/, /titular/, /^nome/]),
+      usina: col([/^usina/]), inst: col([/^instalacao$/, /numero\s*(da\s*)?instala/, /instala/]),
+      uc: col([/unid.*consum/, /^uc$/]), doc: col([/cpf|cnpj/]), mes: col([/mes\s*refer/]),
+      classif: col([/classifica/, /^observ/, /^motivo/]) };
+  }
+  function contar(linhas, i, vazio) {
+    var c = {}; if (i < 0) return c;
+    linhas.forEach(function (l) { var v = l[i] || vazio || '(sem classificação)'; c[v] = (c[v] || 0) + 1; });
+    return c;
+  }
+  function chips(cont, cinza) {
+    return Object.keys(cont).sort(function (a, b) { return cont[b] - cont[a]; })
+      .map(function (k) { return '<span class="ouv-chip' + (cinza ? ' cinza' : '') + '">' + esc(k) + ': <b>' + num(cont[k]) + '</b></span>'; }).join('');
+  }
+
+  function mostrarPrevia(t) {
+    ouv.previa = t;
+    var box = $('#ouv-previa');
+    if (!t) { box.innerHTML = $('#ouv-colar').value.trim() ? '<p class="erro">Não achei o cabeçalho (coluna "Cliente" ou "Instalação"). Copie as linhas junto com o cabeçalho.</p>' : ''; $('#ouv-salvar').disabled = true; return; }
+    var c = colunasOuv(t.cab);
+    var faltam = [c.cliente < 0 && 'Cliente', c.inst < 0 && 'Instalação'].filter(Boolean);
+    box.innerHTML = '<div class="ouv-resumo"><span class="ouv-chip"><b>' + num(t.linhas.length) + '</b> clientes</span>' + chips(contar(t.linhas, c.classif)) + '</div>' +
+      (c.colab >= 0 ? '<div class="ouv-resumo">' + chips(contar(t.linhas, c.colab, '(sem colaborador)'), true) + '</div>' : '') +
+      (faltam.length ? '<p class="erro">Faltou a coluna ' + faltam.join(' e ') + '.</p>' : '') +
+      (c.classif < 0 ? '<p class="dica">Não achei a coluna da classificação. A lista será salva mesmo assim.</p>' : '');
+    if (t.descartadas) box.insertAdjacentHTML('beforeend', '<p class="dica">' + num(t.descartadas) + ' linhas sem classificação (fatura gerada normalmente) ficaram de fora.</p>');
+    $('#ouv-salvar').disabled = !!faltam.length || !t.linhas.length;
+  }
+  $('#ouv-ler-link').addEventListener('click', function () {
+    var link = $('#ouv-link').value.trim(), btn = this;
+    if (!/\/spreadsheets\/d\//.test(link)) { $('#ouv-previa').innerHTML = '<p class="erro">Cole o link da planilha auditada (Google Planilhas).</p>'; return; }
+    btn.disabled = true; $('#ouv-previa').innerHTML = '<p class="dica">Lendo a planilha…</p>';
+    window.Google.lerPlanilha(link, estado.chaveGoogle).then(function (g) {
+      // aba com mais linhas classificadas (a última auditada)
+      var melhor = null;
+      g.nomesAbas.forEach(function (n) {
+        var t = limparTabela(g.abas[n]); if (!t) return;
+        var c = colunasOuv(t.cab), q = c.classif >= 0 ? t.linhas.filter(function (l) { return l[c.classif]; }).length : 0;
+        if (!melhor || q > melhor.q || (q === melhor.q && g.nomesAbas.indexOf(n) > g.nomesAbas.indexOf(melhor.n))) melhor = { n: n, t: t, q: q };
+      });
+      $('#ouv-colar').value = ''; $('#ouv-arquivo').value = '';
+      mostrarPrevia(melhor ? paraFormatoOuv(melhor.t) : null);
+      if (melhor) $('#ouv-previa').insertAdjacentHTML('afterbegin', '<p class="dica">Aba lida: <b>' + esc(melhor.n) + '</b></p>');
+    }).catch(function (e) { $('#ouv-previa').innerHTML = '<p class="erro">' + esc(e.message) + '</p>'; })
+      .then(function () { btn.disabled = false; });
+  });
+  $('#ouv-colar').addEventListener('input', function () { $('#ouv-arquivo').value = ''; mostrarPrevia(paraFormatoOuv(lerTabelaColada(this.value))); });
+  $('#ouv-arquivo').addEventListener('change', function () {
+    var f = this.files[0]; if (!f) return;
+    f.arrayBuffer().then(function (buf) {
+      var wb = window.Planilhas.lerArquivo(f.name, buf), ws = wb.Sheets[wb.SheetNames[0]];
+      $('#ouv-colar').value = '';
+      mostrarPrevia(paraFormatoOuv(limparTabela(window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }))));
+    }).catch(function (e) { $('#ouv-previa').innerHTML = '<p class="erro">Não consegui ler o arquivo: ' + esc(e.message) + '</p>'; });
+  });
+
+  function linkPlanilhaOuv() { return (ouv.dados && ouv.dados.planilha) || PLANILHA_OUV_PADRAO; }
+  function desenharPlanilhaOuv() {
+    var l = linkPlanilhaOuv();
+    $('#ouv-planilha').innerHTML = '📗 Planilha de ouvidorias: <a href="' + esc(l) + '" target="_blank" rel="noopener">Ouvidorias Faturas – Reclamação 6</a>' +
+      ' <button class="btn btn-link btn-peq" type="button" id="ouv-trocar">Trocar link</button>' +
+      (window.Google.conectado() ? ' <button class="btn btn-peq" type="button" id="ouv-sinc">Atualizar a planilha agora</button>' : '') +
+      (window.Google.conectado() ? '' : ' <span class="dica" style="margin:0">Para criar as abas na planilha, clique em <b>Entrar com Google</b> no topo.</span>');
+    if ($('#ouv-sinc')) $('#ouv-sinc').onclick = function () { sincronizarPlanilhaOuv(true); };
+    $('#ouv-trocar').onclick = function () {
+      var novo = window.prompt('Link da planilha de ouvidorias (Google Planilhas):', l);
+      if (novo == null) return; novo = novo.trim();
+      if (!/\/spreadsheets\/d\//.test(novo)) { avisar('Esse não parece um link do Google Planilhas.'); return; }
+      salvarOuv(function (d) { d.planilha = novo; return d; }, 'Ouvidorias: link da planilha').then(renderOuv);
+    };
+  }
+  function salvarOuv(mudar, msg) {
+    return estado.repo.atualizarJSON(ARQ_OUV, { planilha: PLANILHA_OUV_PADRAO, listas: [] }, function (d) {
+      d.listas = d.listas || []; return mudar(d);
+    }, msg + ' (' + estado.nome + ')').then(function (d) { ouv.dados = d; return d; });
+  }
+  function carregarOuv() {
+    $('#ouv-data').value = $('#ouv-data').value || hojeISO();
+    return Promise.all([
+      estado.repo.lerJSON(ARQ_OUV, { planilha: PLANILHA_OUV_PADRAO, listas: [] }),
+      new A.Repositorio(estado.repo.token, 'ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] }).catch(function () { return { registros: [] }; })
+    ]).then(function (r) { ouv.dados = r[0]; ouv.regs = r[1].registros || []; renderOuv(); sincronizarPlanilhaOuv(false); })
+      .catch(function (e) { $('#ouv-listas').innerHTML = '<p class="erro">' + esc(e.message) + '</p>'; });
+  }
+
+  /** Cria a aba com a data na planilha de ouvidorias (se já existir uma aba com esse nome, usa "(2)", "(3)"…). */
+  function criarAbaGoogle(lista) {
+    if (!window.Google.conectado()) return Promise.reject(new Error('Clique em "Entrar com Google" no topo para criar a aba na planilha.'));
+    return window.Google.lerPlanilha(linkPlanilhaOuv(), estado.chaveGoogle).then(function (g) {
+      var nome = lista.data, n = 2;
+      while (g.folhas[nome]) nome = lista.data + ' (' + (n++) + ')';
+      return window.Google.escreverAba(g, nome, [lista.cab].concat(lista.linhas)).then(function (sheetId) {
+        return salvarOuv(function (d) {
+          d.listas.forEach(function (x) { if (x.id === lista.id) { x.aba = nome; x.gid = sheetId; x.planilhaId = g.id; } });
+          return d;
+        }, 'Ouvidorias: aba ' + nome + ' criada na planilha');
+      });
+    });
+  }
+
+  $('#ouv-salvar').addEventListener('click', function () {
+    var t = ouv.previa, btn = this, msg = $('#ouv-msg');
+    if (!t) return;
+    var iso = $('#ouv-data').value || hojeISO();
+    var lista = { id: carimbo(new Date()), dataISO: iso, data: isoParaBR(iso), protocolo: $('#ouv-prot').value.trim(),
+      cab: t.cab, linhas: t.linhas, usuario: estado.nome, criadoEm: new Date().toISOString() };
+    btn.disabled = true; msg.textContent = 'Salvando a lista…';
+    salvarOuv(function (d) { d.listas.push(lista); return d; }, 'Ouvidorias: lista de ' + lista.data)
+      .then(function () {
+        if (!window.Google.conectado()) { msg.textContent = 'Lista salva. Para criar a aba na planilha, clique em "Entrar com Google" e depois em "Criar aba na planilha" na lista.'; return; }
+        msg.textContent = 'Criando a aba "' + lista.data + '" na planilha de ouvidorias…';
+        return criarAbaGoogle(lista).then(function () { msg.textContent = 'Lista salva e aba criada na planilha ✓'; })
+          .catch(function (e) { msg.textContent = 'Lista salva, mas não consegui criar a aba: ' + e.message; });
+      })
+      .then(function () { $('#ouv-colar').value = ''; $('#ouv-arquivo').value = ''; $('#ouv-prot').value = ''; mostrarPrevia(null); renderOuv(); })
+      .catch(function (e) { msg.textContent = 'Não consegui salvar: ' + e.message; btn.disabled = false; });
+  });
+
+  function regOuv(inst, desde) {
+    var k = R.chaveInstalacao(inst); if (!k || !ouv.regs) return null;
+    var rs = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && String(r.criadoEm || '').slice(0, 10) >= desde; });
+    if (!rs.length) return null;
+    return rs.filter(function (r) { return r.status !== 'pendente'; })[0] || rs[0];
+  }
+  function letraCol(n) { var s = ''; n++; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+  /** Atualiza na planilha de ouvidorias as colunas Colaborador, Ouvidoria, Protocolo e Data, conforme as ouvidorias geradas. */
+  var sincronizando = false;
+  function sincronizarPlanilhaOuv(manual) {
+    var listas = ((ouv.dados && ouv.dados.listas) || []).filter(function (l) { return l.aba; });
+    if (sincronizando || !listas.length || !window.Google.conectado()) return Promise.resolve(false);
+    sincronizando = true;
+    return window.Google.lerPlanilha(linkPlanilhaOuv(), estado.chaveGoogle).then(function (g) {
+      var dados = [];
+      listas.forEach(function (l) {
+        var m = g.abas[l.aba]; if (!m || !m.length) return;
+        var cab = m[0].map(function (h) { return nrm(h); }), ci = cab.indexOf(nrm('Instalação')), cc = cab.indexOf('colaborador');
+        var cs = [nrm('Ouvidoria'), nrm('Protocolo da ouvidoria'), nrm('Data da ouvidoria')].map(function (h) { return cab.indexOf(h); });
+        if (ci < 0) return;
+        m.slice(1).forEach(function (linha, j) {
+          var r = regOuv(linha[ci], l.dataISO); if (!r) return;
+          var lin = j + 2, quem = r.responsavel || '';
+          var val = [r.status === 'pendente' ? 'Não enviada (problema no site)' : 'Enviada', r.status === 'pendente' ? '' : (r.protocolo || ''),
+            isoParaBR(String((r.status === 'pendente' ? r.ultimaTentativa : r.dataAbertura) || r.criadoEm || '').slice(0, 10))];
+          if (cc >= 0 && !String(linha[cc] || '').trim() && quem) dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(cc) + lin, values: [[quem]] });
+          cs.forEach(function (c, k) { if (c >= 0 && String(linha[c] == null ? '' : linha[c]) !== val[k]) dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(c) + lin, values: [[val[k]]] }); });
+        });
+      });
+      return window.Google.gravarIntervalos(g.id, dados).then(function () {
+        if (manual) avisar(dados.length ? 'Planilha de ouvidorias atualizada.' : 'A planilha de ouvidorias já estava em dia.');
+        return true;
+      });
+    }).catch(function (e) { if (manual) avisar('Não consegui atualizar a planilha de ouvidorias: ' + e.message); return false; })
+      .then(function (x) { sincronizando = false; return x; });
+  }
+
+  function situacaoOuv(inst, desde) {
+    var k = R.chaveInstalacao(inst); if (!k || !ouv.regs) return null;
+    var rs = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && String(r.criadoEm || '').slice(0, 10) >= desde; });
+    if (!rs.length) return null;
+    var env = rs.filter(function (r) { return r.status !== 'pendente'; })[0];
+    return env ? { cls: 'ok', txt: 'Enviada' + (env.protocolo ? ' · ' + env.protocolo : '') } : { cls: 'pend', txt: 'Não enviada (problema no site)' };
+  }
+
+  function renderOuv() {
+    desenharPlanilhaOuv();
+    var box = $('#ouv-listas'), listas = ((ouv.dados && ouv.dados.listas) || []).slice().sort(function (a, b) { return String(b.dataISO + b.id).localeCompare(String(a.dataISO + a.id)); });
+    if (!listas.length) { box.innerHTML = '<div class="card"><p class="vazio">Nenhuma lista ainda. Cole a primeira lista acima.</p></div>'; return; }
+    box.innerHTML = listas.map(function (l, li) {
+      var c = colunasOuv(l.cab), q = nrm(ouv.filtro[l.id] || '');
+      var feitos = l.linhas.filter(function (x) { var s = situacaoOuv(x[c.inst], l.dataISO); return s && s.cls === 'ok'; }).length;
+      var linhas = l.linhas.map(function (x, i) { return { x: x, i: i }; }).filter(function (o) { return !q || nrm(o.x.join(' ')).indexOf(q) >= 0; });
+      var abaLink = l.gid != null ? 'https://docs.google.com/spreadsheets/d/' + esc(l.planilhaId || (linkPlanilhaOuv().match(/\/d\/([\w-]+)/) || [])[1] || '') + '/edit#gid=' + l.gid : '';
+      return '<details class="card ouv-lista"' + (li === 0 ? ' open' : '') + '><summary>' +
+        '<h3>Lista de ' + esc(l.data) + '</h3><span class="ouv-chip"><b>' + num(l.linhas.length) + '</b> clientes</span>' +
+        '<span class="ouv-chip" style="background:#e7f4ec;color:#1d5a37">' + num(feitos) + ' com ouvidoria enviada</span>' +
+        '<span class="dica">por ' + esc(l.usuario || '') + (l.protocolo ? ' · protocolo do dia ' + esc(l.protocolo) : '') + '</span>' +
+        '<span class="acoes">' + (l.aba ? '<a class="btn btn-peq" href="' + abaLink + '" target="_blank" rel="noopener">Abrir aba "' + esc(l.aba) + '"</a>'
+          : '<button class="btn btn-peq" type="button" data-criar="' + esc(l.id) + '">Criar aba na planilha</button>') +
+        '<button class="btn btn-link btn-peq" type="button" data-excluir="' + esc(l.id) + '">Excluir lista</button></span></summary>' +
+        '<div class="ouv-resumo">' + chips(contar(l.linhas, c.classif)) + '</div>' +
+        '<div class="ouv-filtro"><input class="campo" type="search" placeholder="Buscar cliente, instalação, colaborador…" data-busca="' + esc(l.id) + '" value="' + esc(ouv.filtro[l.id] || '') + '"></div>' +
+        '<div class="tabela-wrap"><table class="ouv-tab"><thead><tr>' + (c.colab >= 0 ? '<th>Colaborador</th>' : '') + '<th>Cliente</th><th>Instalação</th><th>UC</th>' + (c.classif >= 0 ? '<th>Classificação</th>' : '') + '<th>Ouvidoria</th><th></th></tr></thead><tbody>' +
+        linhas.map(function (o) {
+          var x = o.x, s = situacaoOuv(x[c.inst], l.dataISO);
+          var rg = regOuv(x[c.inst], l.dataISO);
+          return '<tr>' + (c.colab >= 0 ? '<td>' + esc(x[c.colab] || (rg && rg.responsavel) || '') + '</td>' : '') + '<td class="cl">' + esc(x[c.cliente]) + '</td><td>' + esc(x[c.inst]) + '</td><td>' + esc(c.uc >= 0 ? x[c.uc] : '') + '</td>' +
+            (c.classif >= 0 ? '<td class="cl">' + esc(x[c.classif]) + '</td>' : '') +
+            '<td>' + (s ? '<span class="ouv-sit ' + s.cls + '">' + esc(s.txt) + '</span>' : '<span class="ouv-sit nao">Não gerada</span>') + '</td>' +
+            '<td><button class="btn btn-peq btn-primario" type="button" data-gerar="' + esc(l.id) + ':' + o.i + '">Gerar ouvidoria</button></td></tr>';
+        }).join('') + '</tbody></table></div></details>';
+    }).join('');
+    $$('[data-busca]', box).forEach(function (inp) {
+      inp.addEventListener('input', function () { ouv.filtro[inp.dataset.busca] = inp.value; var pos = inp.selectionStart; renderOuv(); var n = $('[data-busca="' + inp.dataset.busca + '"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } });
+      inp.addEventListener('click', function (e) { e.stopPropagation(); });
+    });
+    $$('[data-criar]', box).forEach(function (b) {
+      b.onclick = function (e) {
+        e.preventDefault(); var l = ouv.dados.listas.filter(function (x) { return x.id === b.dataset.criar; })[0];
+        b.disabled = true; b.textContent = 'Criando…';
+        criarAbaGoogle(l).then(function () { avisar('Aba criada na planilha de ouvidorias.'); renderOuv(); })
+          .catch(function (err) { avisar(err.message); b.disabled = false; b.textContent = 'Criar aba na planilha'; });
+      };
+    });
+    $$('[data-excluir]', box).forEach(function (b) {
+      b.onclick = function (e) {
+        e.preventDefault();
+        if (b.dataset.conf !== '1') { b.dataset.conf = '1'; b.textContent = 'Excluir mesmo? (a aba na planilha continua)'; return; }
+        salvarOuv(function (d) { d.listas = d.listas.filter(function (x) { return x.id !== b.dataset.excluir; }); return d; }, 'Ouvidorias: lista excluída').then(renderOuv);
+      };
+    });
+    $$('[data-gerar]', box).forEach(function (b) {
+      b.onclick = function () {
+        var p = b.dataset.gerar.split(':'), l = ouv.dados.listas.filter(function (x) { return x.id === p[0]; })[0], x = l.linhas[+p[1]], c = colunasOuv(l.cab);
+        var doc = String(c.doc >= 0 ? x[c.doc] : '').replace(/\D/g, '');
+        var pre = { em: Date.now(), reclamacao: 6, lista: l.data,
+          valores: { nomeCliente: x[c.cliente] || '', instalacao: String(x[c.inst] || '').replace(/\D/g, ''), uc: c.uc >= 0 ? x[c.uc] : '', protocolo: l.protocolo || '', pessoa: doc.length > 11 ? 'PJ' : 'PF' } };
+        try { localStorage.setItem('ouv_prefill', JSON.stringify(pre)); } catch (err) { avisar('O navegador bloqueou a passagem dos dados.'); return; }
+        if (window.PLAT) { try { window.top.location.hash = '#ouvidorias'; } catch (err) { window.open('/central-atendimento/#ouvidorias', '_blank'); } }
+        else window.open('/central-atendimento/#ouvidorias', '_blank');
+      };
+    });
+  }
+  $$('.abas button[data-aba="ouvidorias"]').forEach(function (b) { b.addEventListener('click', function () { carregarOuv(); }); });
+  window.addEventListener('focus', function () { if (!$('[data-painel="ouvidorias"]').hidden && estado.repo) carregarOuv(); });
+
   /* ---------- início ---------- */
   carregarChaveGoogle();
   montarPainel('faturas');
