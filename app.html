@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WattWise · Faturas e Contratos</title>
-  <link rel="stylesheet" href="assets/style.css?v=202611181210">
+  <link rel="stylesheet" href="assets/style.css?v=202611181225">
   <link rel="stylesheet" href="assets/embutido.css?v=1">
 <style>
   /* Faturas e Contratos normal: sem a aba das planilhas de ouvidorias (ela fica em Ouvidorias Cemig) */
@@ -13,6 +13,10 @@
   /* dentro de Ouvidorias Cemig: só as planilhas, sem o topo e as abas de faturas */
   html.modo-planilhas-ouv .topo, html.modo-planilhas-ouv nav.abas { display: none !important; }
   html.modo-planilhas-ouv main { padding-top: 6px; }
+  .ouv-gbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; padding:14px 18px; }
+  .ouv-gbar .gtit { font-weight:700; }
+  .ouv-gbar.ok { border-color:#bfe3cc; background:#f2faf5; }
+  .ouv-gbar.nao { border-color:#f3c98b; background:#fff8ec; }
 </style>
 </head>
 <body>
@@ -102,6 +106,7 @@
 
       <!-- ABA 4: listas de ouvidorias geradas depois da auditoria das faturas -->
       <section class="painel" data-painel="ouvidorias" hidden>
+        <div class="card ouv-gbar" id="ouv-gbar"></div>
         <div class="card">
           <div class="card-titulo"><span class="selo">O</span><h2>Ouvidorias das faturas (Reclamação 6)</h2></div>
           <p class="ajuda">Processo: 1) gerar Faturas Pendentes e Contratos sem Faturas; 2) a Paula ou a Ytala auditam, e as faturas são lançadas manualmente ou classificadas como sem saldo de geração; 3) aqui, a planilha auditada vira uma aba com a data na planilha de ouvidorias; 4) quando alguém registra a ouvidoria do cliente em Ouvidorias Cemig, a linha dele nessa aba é atualizada sozinha: colaborador, situação, protocolo, linha em verde e o link <b>Abrir ouvidoria</b> para ver o cadastro na plataforma.</p>
@@ -158,14 +163,14 @@
 
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="aviso" class="aviso" role="status" hidden></div>
-  <script src="assets/vendor/cpexcel.js?v=202611181210"></script>
-  <script src="assets/vendor/xlsx.bundle.js?v=202611181210"></script>
-  <script src="assets/regras.js?v=202611181210"></script>
-  <script src="assets/planilhas.js?v=202611181210"></script>
-  <script src="assets/armazenamento.js?v=202611181210"></script>
-  <script src="assets/google.js?v=202611181210"></script>
+  <script src="assets/vendor/cpexcel.js?v=202611181225"></script>
+  <script src="assets/vendor/xlsx.bundle.js?v=202611181225"></script>
+  <script src="assets/regras.js?v=202611181225"></script>
+  <script src="assets/planilhas.js?v=202611181225"></script>
+  <script src="assets/armazenamento.js?v=202611181225"></script>
+  <script src="assets/google.js?v=202611181225"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="/central-atendimento/kit/acompanhamento.js?v=202611181210"></script>
-  <script src="assets/app.js?v=202611181210"></script>
+  <script src="/central-atendimento/kit/acompanhamento.js?v=202611181225"></script>
+  <script src="assets/app.js?v=202611181225"></script>
 </body>
 </html>

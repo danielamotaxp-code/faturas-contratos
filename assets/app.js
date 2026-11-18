@@ -943,8 +943,14 @@
     $('#ouv-planilha').innerHTML = '📗 Planilha de ouvidorias: <a href="' + esc(l) + '" target="_blank" rel="noopener">Ouvidorias Faturas – Reclamação 6</a>' +
       ' <button class="btn btn-link btn-peq" type="button" id="ouv-trocar">Trocar link</button>' +
       (window.Google.conectado() ? ' <button class="btn btn-peq" type="button" id="ouv-sinc">Atualizar a planilha agora</button>' : '') +
-      (window.Google.conectado() ? ' <span class="ouv-chip" style="background:#e7f4ec;color:#1d5a37">Google conectado ✓</span>'
-        : ' <button class="btn btn-primario btn-peq" type="button" id="ouv-google">Conectar Google</button> <span class="dica" style="margin:0">Conecte para criar as abas e para as ouvidorias atualizarem a planilha na hora (vale também para Ouvidorias Cemig).</span>');
+'';
+    // conexão com o Google, em destaque no topo da aba
+    var on = window.Google.conectado(), gb = $('#ouv-gbar');
+    gb.className = 'card ouv-gbar ' + (on ? 'ok' : 'nao');
+    gb.innerHTML = on
+      ? '<span class="gtit">✓ Google conectado</span><span class="dica" style="margin:0">As planilhas das ouvidorias são atualizadas com a sua conta do Google.</span>'
+      : '<span class="gtit">Google não conectado</span><button class="btn btn-primario" type="button" id="ouv-google">Conectar Google</button>' +
+        '<span class="dica" style="margin:0">Conecte para criar as abas e para as planilhas das ouvidorias serem atualizadas (vale para toda a plataforma enquanto ela estiver aberta).</span>';
     if ($('#ouv-sinc')) $('#ouv-sinc').onclick = function () { sincronizarPlanilhaOuv(true); };
     if ($('#ouv-google')) $('#ouv-google').onclick = function () {
       window.Google.entrar(estado.clientIdGoogle).then(function () { atualizarConfigGoogle(); avisar('Google conectado.'); renderOuv(); sincronizarPlanilhaOuv(true).then(function () { return sincronizarAcomp(true); }); })
@@ -1051,6 +1057,11 @@
           }
           if (mudou) formatos.push({ repeatCell: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: 0, endColumnIndex: ultimaCol },
             cell: { userEnteredFormat: { backgroundColor: pend ? LARANJA : VERDE } }, fields: 'userEnteredFormat.backgroundColor' } });
+          // colunas da ouvidoria centralizadas e sem negrito
+          if (mudou) [cc].concat(cs).filter(function (c) { return c >= 0; }).forEach(function (c) {
+            formatos.push({ repeatCell: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: c, endColumnIndex: c + 1 },
+              cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: false } } }, fields: 'userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat.bold' } });
+          });
         });
       });
       return window.Google.gravarIntervalos(g.id, dados)
