@@ -938,6 +938,13 @@
   });
 
   function linkPlanilhaOuv() { return (ouv.dados && ouv.dados.planilha) || PLANILHA_OUV_PADRAO; }
+  // a faixa do Google acompanha a conexão feita em qualquer página do portal
+  var gAntes = null;
+  setInterval(function () {
+    var on = !!(window.Google && window.Google.conectado());
+    if (gAntes !== null && on !== gAntes && $('#ouv-gbar') && $('#ouv-gbar').innerHTML) desenharPlanilhaOuv();
+    gAntes = on;
+  }, 3000);
   function desenharPlanilhaOuv() {
     var l = linkPlanilhaOuv();
     $('#ouv-planilha').innerHTML = '📗 Planilha de ouvidorias: <a href="' + esc(l) + '" target="_blank" rel="noopener">Ouvidorias Faturas – Reclamação 6</a>' +
@@ -954,7 +961,10 @@
     if ($('#ouv-sinc')) $('#ouv-sinc').onclick = function () { sincronizarPlanilhaOuv(true); };
     if ($('#ouv-google')) $('#ouv-google').onclick = function () {
       window.Google.entrar(estado.clientIdGoogle).then(function () { atualizarConfigGoogle(); avisar('Google conectado.'); renderOuv(); sincronizarPlanilhaOuv(true).then(function () { return sincronizarAcomp(true); }); })
-        .catch(function (e) { avisar(e.message || 'O login com Google não foi concluído.'); });
+        .catch(function (e) {
+          var msg = e.message || 'O login com Google não foi concluído.'; avisar(msg);
+          var gb = $('#ouv-gbar'); if (gb) gb.insertAdjacentHTML('beforeend', '<p class="erro" style="flex-basis:100%;margin:4px 0 0">' + esc(msg) + '</p>');
+        });
     };
     $('#ouv-trocar').onclick = function () {
       var novo = window.prompt('Link da planilha de ouvidorias (Google Planilhas):', l);
