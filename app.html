@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WattWise · Faturas e Contratos</title>
-  <link rel="stylesheet" href="assets/style.css?v=202611181200">
+  <link rel="stylesheet" href="assets/style.css?v=202611181210">
   <link rel="stylesheet" href="assets/embutido.css?v=1">
 <style>
   /* Faturas e Contratos normal: sem a aba das planilhas de ouvidorias (ela fica em Ouvidorias Cemig) */
@@ -108,16 +108,6 @@
           <div class="ouv-planilha" id="ouv-planilha"></div>
         </div>
         <div class="card" style="margin-top:14px">
-          <div class="card-titulo"><span class="selo">+</span><h3>Outras planilhas de ouvidorias</h3></div>
-          <p class="ajuda">Planilhas que a equipe já mantém (ex.: Auditoria Clientes Thiago, Reclamação 7, Enviadas no Grupo). A plataforma não cria linhas: só atualiza os clientes que estão nelas, pela instalação, com o protocolo (ou "Erro"), o colaborador e o link <b>Abrir ouvidoria</b>. Se a planilha tem uma coluna com "Reclamação N", só vale a ouvidoria daquela reclamação. Também atualiza na hora quando alguém registra a ouvidoria em Ouvidorias Cemig.</p>
-          <div id="ouv-acomp"></div>
-          <div class="filtros" style="margin-top:10px">
-            <button class="btn btn-peq" type="button" id="ouv-acomp-novo">+ Adicionar planilha</button>
-            <button class="btn btn-peq btn-primario" type="button" id="ouv-acomp-sinc">Atualizar essas planilhas agora</button>
-            <span class="dica" id="ouv-acomp-msg" style="margin:0"></span>
-          </div>
-        </div>
-        <div class="card" style="margin-top:14px">
           <div class="card-titulo"><span class="selo">+</span><h3>Nova lista de ouvidorias</h3></div>
           <p class="ajuda">Coloque a planilha <b>auditada</b> (depois de gerar as faturas e classificar na última coluna: lançamento manual do boleto ou sem saldo de geração). Pode ser pelo link do Google Planilhas ou pelo arquivo do Excel. A plataforma pega só quem foi classificado e cria, na planilha de ouvidorias (sempre a mesma), uma <b>aba nova com a data</b>, com a coluna <b>Colaborador</b>.</p>
           <div class="ouv-form"><input type="url" id="ouv-link" class="campo campo-link" placeholder="Link da planilha auditada (Google Planilhas)"><button class="btn" type="button" id="ouv-ler-link">Ler planilha</button></div>
@@ -132,6 +122,16 @@
           </div>
         </div>
         <div id="ouv-listas" style="margin-top:14px"><p class="vazio">Carregando…</p></div>
+        <div class="card" style="margin-top:14px">
+          <div class="card-titulo"><span class="selo">+</span><h3>Outras planilhas de ouvidorias</h3></div>
+          <p class="ajuda">Planilhas que a equipe já mantém (ex.: Auditoria Clientes Thiago, Reclamação 7, Enviadas no Grupo). A plataforma não cria linhas: só atualiza os clientes que estão nelas, pela instalação, com o protocolo (ou "Erro"), o colaborador e o link <b>Abrir ouvidoria</b>. Se a planilha tem uma coluna com "Reclamação N", só vale a ouvidoria daquela reclamação. Também atualiza na hora quando alguém registra a ouvidoria em Ouvidorias Cemig.</p>
+          <div id="ouv-acomp"></div>
+          <div class="filtros" style="margin-top:10px">
+            <button class="btn btn-peq" type="button" id="ouv-acomp-novo">+ Adicionar planilha</button>
+            <button class="btn btn-peq btn-primario" type="button" id="ouv-acomp-sinc">Atualizar essas planilhas agora</button>
+            <span class="dica" id="ouv-acomp-msg" style="margin:0"></span>
+          </div>
+        </div>
       </section>
 
       <!-- ABA 3 -->
@@ -158,14 +158,14 @@
 
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="aviso" class="aviso" role="status" hidden></div>
-  <script src="assets/vendor/cpexcel.js?v=202611181200"></script>
-  <script src="assets/vendor/xlsx.bundle.js?v=202611181200"></script>
-  <script src="assets/regras.js?v=202611181200"></script>
-  <script src="assets/planilhas.js?v=202611181200"></script>
-  <script src="assets/armazenamento.js?v=202611181200"></script>
-  <script src="assets/google.js?v=202611181200"></script>
+  <script src="assets/vendor/cpexcel.js?v=202611181210"></script>
+  <script src="assets/vendor/xlsx.bundle.js?v=202611181210"></script>
+  <script src="assets/regras.js?v=202611181210"></script>
+  <script src="assets/planilhas.js?v=202611181210"></script>
+  <script src="assets/armazenamento.js?v=202611181210"></script>
+  <script src="assets/google.js?v=202611181210"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="/central-atendimento/kit/acompanhamento.js?v=202611181200"></script>
-  <script src="assets/app.js?v=202611181200"></script>
+  <script src="/central-atendimento/kit/acompanhamento.js?v=202611181210"></script>
+  <script src="assets/app.js?v=202611181210"></script>
 </body>
 </html>
