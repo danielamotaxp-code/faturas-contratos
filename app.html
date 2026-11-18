@@ -10,6 +10,7 @@
 <style>
   /* Faturas e Contratos normal: sem a aba das planilhas de ouvidorias (ela fica em Ouvidorias Cemig) */
   html:not(.modo-planilhas-ouv) .so-planilhas-ouv { display: none !important; }
+  html.modo-planilhas-ouv #ouv-gbar { display: none !important; }
   /* dentro de Ouvidorias Cemig: só as planilhas, sem o topo e as abas de faturas */
   html.modo-planilhas-ouv .topo, html.modo-planilhas-ouv nav.abas { display: none !important; }
   html.modo-planilhas-ouv main { padding-top: 6px; }
