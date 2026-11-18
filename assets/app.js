@@ -871,6 +871,7 @@
     var idx = COLS_OUV.map(function (nome) {
       if (nome === 'Classificação') return c.classif;
       if (nome === 'Colaborador') return c.colab;
+      if (window.Auditada) return window.Auditada.colunaDe(t.cab, nome);
       var n = nrm(nome); return t.cab.findIndex(function (h) { return nrm(h) === n; });
     });
     var usar = COLS_OUV.map(function (nome, i) { return { nome: nome, i: idx[i] }; })
@@ -896,6 +897,15 @@
       .map(function (k) { return '<span class="ouv-chip' + (cinza ? ' cinza' : '') + '">' + esc(k) + ': <b>' + num(cont[k]) + '</b></span>'; }).join('');
   }
 
+  // explica o que a plataforma entendeu da planilha (aba, colunas de classificação, legenda das cores)
+  function mostrarInterpretacao(x) {
+    var t = x.t, leg = Object.keys(t.legenda || {});
+    $('#ouv-previa').insertAdjacentHTML('afterbegin', '<p class="dica">Aba lida: <b>' + esc(x.n) + '</b>' +
+      (t.colunasClassificacao.length ? ' · classificação nas colunas <b>' + esc(t.colunasClassificacao.join(', ')) + '</b>' : '') +
+      (leg.length ? ' · legenda das cores: ' + leg.map(function (k) { return '<b>' + esc(k) + '</b> = ' + esc(t.legenda[k]); }).join('; ') : '') +
+      (t.semClassificacao ? ' · ' + num(t.semClassificacao) + ' linha(s) sem classificação ficaram de fora' : '') +
+      (t.descartadas ? ' · ' + num(t.descartadas) + ' desconectado(s)/inativo(s) fora' : '') + '</p>');
+  }
   function mostrarPrevia(t) {
     ouv.previa = t;
     var box = $('#ouv-previa');
@@ -915,25 +925,37 @@
     if (!/\/spreadsheets\/d\//.test(link)) { $('#ouv-previa').innerHTML = '<p class="erro">Cole o link da planilha auditada (Google Planilhas).</p>'; return; }
     btn.disabled = true; $('#ouv-previa').innerHTML = '<p class="dica">Lendo a planilha…</p>';
     window.Google.lerPlanilha(link, estado.chaveGoogle).then(function (g) {
-      // aba com mais linhas classificadas (a última auditada)
-      var melhor = null;
-      g.nomesAbas.forEach(function (n) {
-        var t = limparTabela(g.abas[n]); if (!t) return;
-        var c = colunasOuv(t.cab), q = c.classif >= 0 ? t.linhas.filter(function (l) { return l[c.classif]; }).length : 0;
-        if (!melhor || q > melhor.q || (q === melhor.q && g.nomesAbas.indexOf(n) > g.nomesAbas.indexOf(melhor.n))) melhor = { n: n, t: t, q: q };
+      // as cores só vêm com o Google conectado; sem elas, lê só as colunas
+      return Promise.all(g.nomesAbas.map(function (n) {
+        return (window.Google.conectado() ? window.Google.coresAba(g.id, n, estado.chaveGoogle).catch(function () { return []; }) : Promise.resolve([]))
+          .then(function (hex) { return { n: n, cores: hex.map(function (l) { return (l || []).map(window.Auditada.nomeCor); }) }; });
+      })).then(function (cs) {
+        // aba com mais linhas classificadas (a última auditada)
+        var melhor = null;
+        g.nomesAbas.forEach(function (n, i) {
+          var t = window.Auditada.interpretar(g.abas[n], cs[i].cores); if (!t) return;
+          if (!melhor || t.linhas.length > melhor.t.linhas.length || (t.linhas.length === melhor.t.linhas.length && i > melhor.i)) melhor = { n: n, t: t, i: i };
+        });
+        $('#ouv-arquivo').value = '';
+        mostrarPrevia(melhor ? paraFormatoOuv(melhor.t) : null);
+        if (melhor) mostrarInterpretacao(melhor);
       });
-      $('#ouv-arquivo').value = '';
-      mostrarPrevia(melhor ? paraFormatoOuv(melhor.t) : null);
-      if (melhor) $('#ouv-previa').insertAdjacentHTML('afterbegin', '<p class="dica">Aba lida: <b>' + esc(melhor.n) + '</b></p>');
     }).catch(function (e) { $('#ouv-previa').innerHTML = '<p class="erro">' + esc(e.message) + '</p>'; })
       .then(function () { btn.disabled = false; });
   });
   $('#ouv-arquivo').addEventListener('change', function () {
     var f = this.files[0]; if (!f) return;
     f.arrayBuffer().then(function (buf) {
-      var wb = window.Planilhas.lerArquivo(f.name, buf), ws = wb.Sheets[wb.SheetNames[0]];
       $('#ouv-link').value = '';
-      mostrarPrevia(paraFormatoOuv(limparTabela(window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }))));
+      var wb = /\.csv$/i.test(f.name) ? window.Planilhas.lerArquivo(f.name, buf) : window.XLSX.read(buf, { type: 'array', cellDates: true, cellStyles: true });
+      // a aba com mais linhas classificadas
+      var melhor = null;
+      wb.SheetNames.forEach(function (nm) {
+        var a = window.Auditada.daAbaXlsx(wb.Sheets[nm], window.XLSX), t = window.Auditada.interpretar(a.m, a.cores);
+        if (t && (!melhor || t.linhas.length > melhor.t.linhas.length)) melhor = { n: nm, t: t };
+      });
+      mostrarPrevia(melhor ? paraFormatoOuv(melhor.t) : null);
+      if (melhor) mostrarInterpretacao(melhor);
     }).catch(function (e) { $('#ouv-previa').innerHTML = '<p class="erro">Não consegui ler o arquivo: ' + esc(e.message) + '</p>'; });
   });
 

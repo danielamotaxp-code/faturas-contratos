@@ -117,6 +117,22 @@
     });
   }
 
+  /** Cores de fundo de uma aba (para ler a classificação por cor e a legenda). Matriz de "#RRGGBB" ('' = sem cor). */
+  function coresAba(id, nomeAba, chave) {
+    var q = 'ranges=' + encodeURIComponent(aspas(nomeAba)) + '&fields=' + encodeURIComponent('sheets.data(startRow,startColumn,rowData.values.effectiveFormat.backgroundColor)');
+    return chamar(API + id + '?includeGridData=true&' + q, {}, chave).then(function (j) {
+      var d = (((j.sheets || [])[0] || {}).data || [])[0] || {}, out = [];
+      (d.rowData || []).forEach(function (rw, r) {
+        out[(d.startRow || 0) + r] = (rw.values || []).map(function (v) {
+          var b = v.effectiveFormat && v.effectiveFormat.backgroundColor; if (!b) return '';
+          var h = function (x) { return ('0' + Math.round((x || 0) * 255).toString(16)).slice(-2); };
+          return (h(b.red) + h(b.green) + h(b.blue)).toUpperCase();
+        });
+      });
+      return out;
+    });
+  }
+
   function corRGB(hex) {
     return { red: parseInt(hex.slice(0, 2), 16) / 255, green: parseInt(hex.slice(2, 4), 16) / 255, blue: parseInt(hex.slice(4, 6), 16) / 255 };
   }
@@ -201,7 +217,7 @@
 
   var api = {
     planilha: function (id) { return metadados(id); },
-    ler: function (id, intervalo) { return chamar(API + id + '/values/' + encodeURIComponent(intervalo) + '?valueRenderOption=FORMATTED_VALUE', {}).then(function (v) { return v.values || []; }); }, lerPlanilha: lerPlanilha, idDoLink: idDoLink, entrar: entrar, sair: sair, conectado: conectado,
+    ler: function (id, intervalo) { return chamar(API + id + '/values/' + encodeURIComponent(intervalo) + '?valueRenderOption=FORMATTED_VALUE', {}).then(function (v) { return v.values || []; }); }, lerPlanilha: lerPlanilha, coresAba: coresAba, idDoLink: idDoLink, entrar: entrar, sair: sair, conectado: conectado,
     pintarAba: pintarAba, escreverAba: escreverAba, filtrarAbas: filtrarAbas, gravarIntervalos: gravarIntervalos, aspas: aspas, lote: lote, corRGB: corRGB };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Google = api;
 })(this);
