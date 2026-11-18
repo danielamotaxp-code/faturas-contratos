@@ -96,13 +96,17 @@
       .then(function () { btn.disabled = false; btn.textContent = 'Entrar'; });
   });
 
+  // Planilhas das ouvidorias: esta aba aparece dentro de Ouvidorias Cemig (app.html?modo=planilhas-ouv), não em Faturas e Contratos
+  var MODO_PLANILHAS = /[?&]modo=planilhas-ouv\b/.test(location.search);
+  if (MODO_PLANILHAS) document.documentElement.classList.add('modo-planilhas-ouv');
+
   function entrar(token, nome) {
     estado.repo = new A.Repositorio(token);
     estado.nome = nome;
     guardar('ww_token', token); guardar('ww_nome', nome);
     $('#nome-usuario').textContent = nome;
     mostrar('tela-app');
-    $('.abas button[data-aba="faturas"]').click();
+    $('.abas button[data-aba="' + (MODO_PLANILHAS ? 'ouvidorias' : 'faturas') + '"]').click();
     carregarLista();
   }
 
@@ -877,7 +881,7 @@
   }
   function colunasOuv(cab) {
     var col = function (re) { return R.coluna(cab, re); };
-    return { colab: col([/colaborador/, /responsavel/]), cliente: col([/^cliente$/, /^cliente/, /titular/, /^nome/]),
+    return { colab: col([/colaborador/, /responsavel/]), cliente: col([/^cliente$/, /^cliente/, /titular/, /^nome$/, /^nome\s*(do\s*)?(cliente|consumidor|titular)/, /razao\s*social/, /consumidor/, /^nome(?!.*(usina|parceiro|backoffice|associado|colaborador))/]),
       usina: col([/^usina/]), inst: col([/^instalacao$/, /numero\s*(da\s*)?instala/, /instala/]),
       uc: col([/unid.*consum/, /^uc$/]), doc: col([/cpf|cnpj/]), mes: col([/mes\s*refer/]),
       classif: col([/classifica/, /^observ/, /^motivo/]) };
@@ -897,10 +901,11 @@
     var box = $('#ouv-previa');
     if (!t) { box.innerHTML = arguments.length ? '<p class="erro">Não achei o cabeçalho (coluna "Cliente" ou "Instalação") na planilha.</p>' : ''; $('#ouv-salvar').disabled = true; return; }
     var c = colunasOuv(t.cab);
-    var faltam = [c.cliente < 0 && 'Cliente', c.inst < 0 && 'Instalação'].filter(Boolean);
+    var faltam = [c.inst < 0 && 'Instalação'].filter(Boolean);
     box.innerHTML = '<div class="ouv-resumo"><span class="ouv-chip"><b>' + num(t.linhas.length) + '</b> clientes</span>' + chips(contar(t.linhas, c.classif)) + '</div>' +
       (c.colab >= 0 ? '<div class="ouv-resumo">' + chips(contar(t.linhas, c.colab, '(sem colaborador)'), true) + '</div>' : '') +
-      (faltam.length ? '<p class="erro">Faltou a coluna ' + faltam.join(' e ') + '.</p>' : '') +
+      (faltam.length ? '<p class="erro">Faltou a coluna ' + faltam.join(' e ') + '. Colunas encontradas: ' + esc(t.cab.filter(Boolean).join(', ')) + '.</p>' : '') +
+      (c.cliente < 0 ? '<p class="dica">Não achei a coluna com o nome do cliente; a lista será salva sem ela (o cliente é achado pela instalação).</p>' : '') +
       (c.classif < 0 ? '<p class="dica">Não achei a coluna da classificação. A lista será salva mesmo assim.</p>' : '');
     if (t.descartadas) box.insertAdjacentHTML('beforeend', '<p class="dica">' + num(t.descartadas) + ' linhas sem classificação (fatura gerada normalmente) ficaram de fora.</p>');
     $('#ouv-salvar').disabled = !!faltam.length || !t.linhas.length;
