@@ -16,10 +16,16 @@
 
   /* ---------------- login com Google ---------------- */
 
-  function conectado() { return !!sessao.token && Date.now() < sessao.expira - 60000; }
+  // Dentro da plataforma, usa a mesma conexão com o Google das outras páginas (Ouvidorias Cemig etc.)
+  function portal() { try { return raiz.PLAT && raiz.PLAT.google && raiz.PLAT.google.token ? raiz.PLAT.google : null; } catch (e) { return null; } }
+  function propria() { return !!sessao.token && Date.now() < sessao.expira - 60000; }
+  function tokenDoPortal() { var g = portal(); return g ? g.token() : null; }
+  function conectado() { return propria() || !!tokenDoPortal(); }
 
   /** Abre a janela do Google para autorizar. Precisa ser chamado a partir de um clique. */
   function entrar(clientId) {
+    var g = portal();
+    if (g) return g.entrar().then(function () { if (!tokenDoPortal()) throw new Error('O login com Google não foi concluído.'); });
     return new Promise(function (ok, falha) {
       if (!clientId) return falha(new Error('O "Entrar com Google" ainda não foi configurado. Peça para a administradora salvar o ID do cliente em Configurações.'));
       if (!raiz.google || !raiz.google.accounts || !raiz.google.accounts.oauth2) return falha(new Error('Não consegui carregar o login do Google. Recarregue a página.'));
@@ -75,7 +81,7 @@
   function chamar(url, opcoes, chave, escrevendo) {
     var o = opcoes || {};
     o.headers = Object.assign({}, o.headers || {});
-    if (conectado()) o.headers.Authorization = 'Bearer ' + sessao.token;
+    if (conectado()) o.headers.Authorization = 'Bearer ' + (propria() ? sessao.token : tokenDoPortal());
     else if (chave) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'key=' + encodeURIComponent(chave);
     else return Promise.reject(new Error('Clique em "Entrar com Google" para ler a planilha pelo link.'));
     if (o.body) o.headers['Content-Type'] = 'application/json';

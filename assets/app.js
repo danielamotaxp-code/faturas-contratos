@@ -938,8 +938,13 @@
     $('#ouv-planilha').innerHTML = '📗 Planilha de ouvidorias: <a href="' + esc(l) + '" target="_blank" rel="noopener">Ouvidorias Faturas – Reclamação 6</a>' +
       ' <button class="btn btn-link btn-peq" type="button" id="ouv-trocar">Trocar link</button>' +
       (window.Google.conectado() ? ' <button class="btn btn-peq" type="button" id="ouv-sinc">Atualizar a planilha agora</button>' : '') +
-      (window.Google.conectado() ? '' : ' <span class="dica" style="margin:0">Para criar as abas na planilha, clique em <b>Entrar com Google</b> no topo.</span>');
+      (window.Google.conectado() ? ' <span class="ouv-chip" style="background:#e7f4ec;color:#1d5a37">Google conectado ✓</span>'
+        : ' <button class="btn btn-primario btn-peq" type="button" id="ouv-google">Conectar Google</button> <span class="dica" style="margin:0">Conecte para criar as abas e para as ouvidorias atualizarem a planilha na hora (vale também para Ouvidorias Cemig).</span>');
     if ($('#ouv-sinc')) $('#ouv-sinc').onclick = function () { sincronizarPlanilhaOuv(true); };
+    if ($('#ouv-google')) $('#ouv-google').onclick = function () {
+      window.Google.entrar(estado.clientIdGoogle).then(function () { atualizarConfigGoogle(); avisar('Google conectado.'); renderOuv(); sincronizarPlanilhaOuv(true).then(function () { return sincronizarAcomp(true); }); })
+        .catch(function (e) { avisar(e.message || 'O login com Google não foi concluído.'); });
+    };
     $('#ouv-trocar').onclick = function () {
       var novo = window.prompt('Link da planilha de ouvidorias (Google Planilhas):', l);
       if (novo == null) return; novo = novo.trim();
@@ -957,7 +962,7 @@
     return Promise.all([
       estado.repo.lerJSON(ARQ_OUV, { planilha: PLANILHA_OUV_PADRAO, listas: [] }),
       new A.Repositorio(estado.repo.token, 'ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] }).catch(function () { return { registros: [] }; })
-    ]).then(function (r) { ouv.dados = r[0]; ouv.regs = r[1].registros || []; renderOuv(); sincronizarPlanilhaOuv(false); })
+    ]).then(function (r) { ouv.dados = r[0]; ouv.regs = r[1].registros || []; renderOuv(); desenharAcomp(); sincronizarPlanilhaOuv(false).then(function () { return sincronizarAcomp(false); }); })
       .catch(function (e) { $('#ouv-listas').innerHTML = '<p class="erro">' + esc(e.message) + '</p>'; });
   }
 
@@ -1114,6 +1119,63 @@
       };
     });
   }
+  /* ---------- outras planilhas de ouvidorias (só atualiza os clientes que já estão nelas) ---------- */
+  function gPortal() { return window.PLAT && window.PLAT.google && window.PLAT.google.conectado && window.PLAT.google.conectado() ? window.PLAT.google : null; }
+  function desenharAcomp() {
+    var box = $('#ouv-acomp'), ps = (ouv.dados && ouv.dados.acompanhadas) || [];
+    box.innerHTML = ps.length ? '<div class="tabela-wrap"><table class="ouv-tab"><thead><tr><th>Planilha</th><th>Reclamações</th><th>Pinta a linha</th><th>Ouvidorias desde</th><th>Última atualização</th><th></th></tr></thead><tbody>' +
+      ps.map(function (p, i) {
+        var u = ouv.ultimaAcomp && ouv.ultimaAcomp[p.nome];
+        return '<tr><td class="cl"><a href="' + esc(p.link) + '" target="_blank" rel="noopener">' + esc(p.nome) + '</a></td>' +
+          '<td>' + ((p.reclamacoes || []).length ? p.reclamacoes.join(', ') : 'Pela coluna da planilha') + '</td>' +
+          '<td>' + (p.colorir ? 'Sim (verde / laranja)' : 'Não (mantém as cores)') + '</td><td>' + esc(isoParaBR(p.desde || '')) + '</td>' +
+          '<td>' + (u ? (u.erro ? '<span class="erro">' + esc(u.erro) + '</span>' : num(u.linhas) + ' linha(s) atualizada(s)') : '—') + '</td>' +
+          '<td><button class="btn btn-link btn-peq" type="button" data-acomp-ed="' + i + '">Editar</button> <button class="btn btn-link btn-peq" type="button" data-acomp-del="' + i + '">Tirar</button></td></tr>';
+      }).join('') + '</tbody></table></div>' : '<p class="vazio">Nenhuma planilha ainda.</p>';
+    $$('[data-acomp-ed]', box).forEach(function (b) { b.onclick = function () { editarAcomp(+b.dataset.acompEd); }; });
+    $$('[data-acomp-del]', box).forEach(function (b) {
+      b.onclick = function () {
+        if (b.dataset.conf !== '1') { b.dataset.conf = '1'; b.textContent = 'Tirar mesmo?'; return; }
+        var nome = ps[+b.dataset.acompDel].nome;
+        salvarOuv(function (d) { d.acompanhadas = (d.acompanhadas || []).filter(function (x) { return x.nome !== nome; }); return d; }, 'Ouvidorias: tira a planilha ' + nome).then(desenharAcomp);
+      };
+    });
+  }
+  function editarAcomp(i) {
+    var ps = (ouv.dados && ouv.dados.acompanhadas) || [], p = i != null ? ps[i] : {};
+    var nome = window.prompt('Nome da planilha:', p.nome || ''); if (!nome) return;
+    var link = window.prompt('Link da planilha (Google Planilhas):', p.link || ''); if (!link) return;
+    if (!/\/spreadsheets\/d\//.test(link)) { avisar('Esse não parece um link do Google Planilhas. Se for um arquivo do Excel (.xlsx), abra no Drive e use Arquivo → Salvar como Planilhas Google.'); return; }
+    var colorir = window.confirm('Pintar a linha de verde quando a ouvidoria for enviada (e laranja quando der erro)?\n\nOK = pintar · Cancelar = manter as cores da planilha');
+    var rq = window.prompt('Quais reclamações valem para essa planilha? (ex.: 7, 8)\nDeixe vazio para usar a coluna "Reclamação N" de cada linha, ou qualquer reclamação se não houver essa coluna.', (p.reclamacoes || []).join(', '));
+    if (rq === null) return;
+    var reclamacoes = (rq.match(/\d+/g) || []).map(Number);
+    var desde = window.prompt('Considerar ouvidorias registradas a partir de (dd/mm/aaaa):', isoParaBR(p.desde || hojeISO())) || '';
+    var d = desde.match(/(\d{2})\/(\d{2})\/(\d{4})/), iso = d ? d[3] + '-' + d[2] + '-' + d[1] : (p.desde || hojeISO());
+    var novo = { nome: nome.trim(), link: link.trim(), colorir: colorir, reclamacoes: reclamacoes, desde: iso };
+    salvarOuv(function (dd) {
+      dd.acompanhadas = dd.acompanhadas || [];
+      if (i != null) dd.acompanhadas = dd.acompanhadas.map(function (x) { return x.nome === p.nome ? novo : x; }); else dd.acompanhadas.push(novo);
+      return dd;
+    }, 'Ouvidorias: planilha ' + novo.nome).then(function () { desenharAcomp(); sincronizarAcomp(true); });
+  }
+  var sincAcomp = false;
+  function sincronizarAcomp(manual) {
+    var ps = (ouv.dados && ouv.dados.acompanhadas) || [], g = gPortal(), msg = $('#ouv-acomp-msg');
+    if (!ps.length || sincAcomp || !window.Acompanhamento) return Promise.resolve();
+    if (!g) { if (manual) msg.textContent = 'Clique em "Conectar Google" (lá em cima, nesta aba) para atualizar as planilhas.'; return Promise.resolve(); }
+    sincAcomp = true; msg.textContent = 'Atualizando as planilhas…';
+    return window.Acompanhamento.sincronizar({ google: g, planilhas: ps, registros: ouv.regs || [] }).then(function (res) {
+      ouv.ultimaAcomp = {}; res.forEach(function (x) { ouv.ultimaAcomp[x.nome] = x; });
+      var tot = res.reduce(function (n, x) { return n + (x.linhas || 0); }, 0), erros = res.filter(function (x) { return x.erro; });
+      msg.textContent = (tot ? num(tot) + ' linha(s) atualizada(s).' : 'Tudo em dia.') + (erros.length ? ' Não consegui abrir: ' + erros.map(function (x) { return x.nome; }).join(', ') + '.' : '');
+      desenharAcomp();
+    }).catch(function (e) { msg.textContent = 'Não consegui atualizar: ' + e.message; })
+      .then(function () { sincAcomp = false; });
+  }
+  $('#ouv-acomp-novo').addEventListener('click', function () { editarAcomp(null); });
+  $('#ouv-acomp-sinc').addEventListener('click', function () { sincronizarAcomp(true); });
+
   $$('.abas button[data-aba="ouvidorias"]').forEach(function (b) { b.addEventListener('click', function () { carregarOuv(); }); });
   window.addEventListener('focus', function () { if (!$('[data-painel="ouvidorias"]').hidden && estado.repo) carregarOuv(); });
 
