@@ -960,6 +960,7 @@
         '<span class="dica" style="margin:0">Conecte para criar as abas e para as planilhas das ouvidorias serem atualizadas (vale para toda a plataforma enquanto ela estiver aberta).</span>';
     if ($('#ouv-sinc')) $('#ouv-sinc').onclick = function () { sincronizarPlanilhaOuv(true); };
     if ($('#ouv-google')) $('#ouv-google').onclick = function () {
+      var gb0 = $('#ouv-gbar'); if (gb0) gb0.insertAdjacentHTML('beforeend', '<p class="dica" style="flex-basis:100%;margin:4px 0 0">Termine na janela do Google (escolher a conta, Acessar e Continuar). Esta faixa fica verde sozinha quando terminar.</p>');
       window.Google.entrar(estado.clientIdGoogle).then(function () { atualizarConfigGoogle(); avisar('Google conectado.'); renderOuv(); sincronizarPlanilhaOuv(true).then(function () { return sincronizarAcomp(true); }); })
         .catch(function (e) {
           var msg = e.message || 'O login com Google não foi concluído.'; avisar(msg);
