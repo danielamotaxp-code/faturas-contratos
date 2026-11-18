@@ -1120,7 +1120,11 @@
     });
   }
   /* ---------- outras planilhas de ouvidorias (só atualiza os clientes que já estão nelas) ---------- */
-  function gPortal() { return window.PLAT && window.PLAT.google && window.PLAT.google.conectado && window.PLAT.google.conectado() ? window.PLAT.google : null; }
+  function gPortal() {
+    if (window.PLAT && window.PLAT.google && window.PLAT.google.conectado && window.PLAT.google.conectado()) return window.PLAT.google;
+    if (window.Google && window.Google.conectado && window.Google.conectado()) return window.Google; // Google conectado nesta página
+    return null;
+  }
   function desenharAcomp() {
     var box = $('#ouv-acomp'), ps = (ouv.dados && ouv.dados.acompanhadas) || [];
     box.innerHTML = ps.length ? '<div class="tabela-wrap"><table class="ouv-tab"><thead><tr><th>Planilha</th><th>Reclamações</th><th>Pinta a linha</th><th>Ouvidorias desde</th><th>Última atualização</th><th></th></tr></thead><tbody>' +

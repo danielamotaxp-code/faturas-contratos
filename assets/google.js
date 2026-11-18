@@ -199,7 +199,9 @@
     return chamar(API + id + '/values:batchUpdate', { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: dados }) }, null, true);
   }
 
-  var api = { lerPlanilha: lerPlanilha, idDoLink: idDoLink, entrar: entrar, sair: sair, conectado: conectado,
+  var api = {
+    planilha: function (id) { return metadados(id); },
+    ler: function (id, intervalo) { return chamar(API + id + '/values/' + encodeURIComponent(intervalo) + '?valueRenderOption=FORMATTED_VALUE', {}).then(function (v) { return v.values || []; }); }, lerPlanilha: lerPlanilha, idDoLink: idDoLink, entrar: entrar, sair: sair, conectado: conectado,
     pintarAba: pintarAba, escreverAba: escreverAba, filtrarAbas: filtrarAbas, gravarIntervalos: gravarIntervalos, aspas: aspas, lote: lote, corRGB: corRGB };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Google = api;
 })(this);
