@@ -988,8 +988,8 @@
     $('#ouv-data').value = $('#ouv-data').value || hojeISO();
     return Promise.all([
       estado.repo.lerJSON(ARQ_OUV, { planilha: PLANILHA_OUV_PADRAO, listas: [] }),
-      new A.Repositorio(estado.repo.token, 'ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] }).catch(function () { return { registros: [] }; })
-    ]).then(function (r) { ouv.dados = r[0]; ouv.regs = r[1].registros || []; renderOuv(); desenharAcomp(); sincronizarPlanilhaOuv(false).then(function () { return sincronizarAcomp(false); }); })
+      new A.Repositorio(estado.repo.token, 'ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] }).catch(function () { return { registros: null }; })
+    ]).then(function (r) { ouv.dados = r[0]; ouv.regs = r[1].registros || null; if (!ouv.regs) avisar("Não consegui carregar a lista de ouvidorias da plataforma. Recarregue a página."); renderOuv(); desenharAcomp(); sincronizarPlanilhaOuv(false).then(function () { return sincronizarAcomp(false); }); })
       .catch(function (e) { $('#ouv-listas').innerHTML = '<p class="erro">' + esc(e.message) + '</p>'; });
   }
 
@@ -1199,6 +1199,7 @@
   function sincronizarAcomp(manual) {
     var ps = (ouv.dados && ouv.dados.acompanhadas) || [], g = gPortal(), msg = $('#ouv-acomp-msg');
     if (!ps.length || sincAcomp || !window.Acompanhamento) return Promise.resolve();
+    if (!ouv.regs || !ouv.regs.length) { if (manual) msg.textContent = 'A lista de ouvidorias da plataforma ainda não carregou. Espere um instante e tente de novo.'; return Promise.resolve(); }
     if (!g) { if (manual) msg.textContent = 'Clique em "Conectar Google" (lá em cima, nesta aba) para atualizar as planilhas.'; return Promise.resolve(); }
     sincAcomp = true; msg.textContent = 'Atualizando as planilhas…';
     return window.Acompanhamento.sincronizar({ google: g, planilhas: ps, registros: ouv.regs || [] }).then(function (res) {
