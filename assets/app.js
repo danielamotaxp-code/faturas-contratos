@@ -965,6 +965,8 @@
   setInterval(function () {
     var on = !!(window.Google && window.Google.conectado());
     if (gAntes !== null && on !== gAntes && $('#ouv-gbar') && $('#ouv-gbar').innerHTML) desenharPlanilhaOuv();
+    // acabou de conectar o Google: atualiza as abas das listas e as outras planilhas
+    if (gAntes === false && on && ouv.dados) ouvCarregarRegs().then(function () { return sincronizarPlanilhaOuv(false); }).then(function () { return sincronizarAcomp(false); });
     gAntes = on;
   }, 3000);
   function desenharPlanilhaOuv() {
