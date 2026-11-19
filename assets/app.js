@@ -153,7 +153,9 @@
       .then(function () { btn.disabled = false; btn.textContent = 'Salvar configuração'; });
   });
 
+  var ultimoAvisoSinc = '';
   function avisar(msg) {
+    ultimoAvisoSinc = msg;
     var el = $('#aviso');
     el.textContent = msg; el.hidden = false;
     setTimeout(function () { el.hidden = true; }, 9000);
@@ -969,12 +971,13 @@
     if (gAntes === false && on && ouv.dados) ouvCarregarRegs().then(function () { return sincronizarPlanilhaOuv(false); }).then(function () { return sincronizarAcomp(false); });
     gAntes = on;
   }, 3000);
+  var sincBotao = { rodando: false, msg: '' };
   function desenharPlanilhaOuv() {
     var l = linkPlanilhaOuv();
     $('#ouv-planilha').innerHTML = '📗 Planilha de ouvidorias: <a href="' + esc(l) + '" target="_blank" rel="noopener">Ouvidorias Faturas – Reclamação 6</a>' +
       ' <button class="btn btn-link btn-peq" type="button" id="ouv-trocar">Trocar link</button>' +
-      (window.Google.conectado() ? ' <button class="btn btn-peq" type="button" id="ouv-sinc">Atualizar a planilha agora</button>' : '') +
-'';
+      (window.Google.conectado() ? ' <button class="btn btn-peq" type="button" id="ouv-sinc"' + (sincBotao.rodando ? ' disabled>Atualizando…' : '>Atualizar a planilha agora') + '</button>' +
+        ' <span id="ouv-sinc-st" style="margin-left:8px;font-size:.9rem">' + esc(sincBotao.msg) + '</span>' : '');
     // conexão com o Google, em destaque no topo da aba
     var on = window.Google.conectado(), gb = $('#ouv-gbar');
     gb.className = 'card ouv-gbar ' + (on ? 'ok' : 'nao');
@@ -982,7 +985,15 @@
       ? '<span class="gtit">✓ Google conectado</span><span class="dica" style="margin:0">As planilhas das ouvidorias são atualizadas com a sua conta do Google.</span>'
       : '<span class="gtit">Google não conectado</span><button class="btn btn-primario" type="button" id="ouv-google">Conectar Google</button>' +
         '<span class="dica" style="margin:0">Conecte para criar as abas e para as planilhas das ouvidorias serem atualizadas (vale para toda a plataforma enquanto ela estiver aberta).</span>';
-    if ($('#ouv-sinc')) $('#ouv-sinc').onclick = function () { sincronizarPlanilhaOuv(true); };
+    if ($('#ouv-sinc')) $('#ouv-sinc').onclick = function () {
+      // o andamento aparece ao lado do botão (o aviso flutuante fica fora da tela dentro do portal)
+      sincBotao.rodando = true; sincBotao.msg = ''; desenharPlanilhaOuv();
+      var espera = function () { return sincronizando ? new Promise(function (ok) { setTimeout(ok, 800); }).then(espera) : Promise.resolve(); };
+      espera().then(ouvCarregarRegs).then(function () { ultimoAvisoSinc = ''; return sincronizarPlanilhaOuv(true); })
+        .then(function () { sincBotao.msg = ultimoAvisoSinc || 'Pronto.'; })
+        .catch(function (e) { sincBotao.msg = 'Não consegui atualizar: ' + (e && e.message || e); })
+        .then(function () { sincBotao.rodando = false; desenharPlanilhaOuv(); });
+    };
     if ($('#ouv-google')) $('#ouv-google').onclick = function () {
       // dentro do portal: conecta pela página do Google e volta (a janela do Google falha em alguns Chrome)
       if (window.PLAT && window.PLAT.google && window.PLAT.google.entrarPelaPagina) {
@@ -1079,6 +1090,8 @@
   var VERDE = { red: 0.204, green: 0.659, blue: 0.325 }, LARANJA = { red: 0.992, green: 0.851, blue: 0.663 };
   function sincronizarPlanilhaOuv(manual) {
     var listas = ((ouv.dados && ouv.dados.listas) || []).filter(function (l) { return l.aba; });
+    if (manual && !window.Google.conectado()) { avisar('Conecte o Google no topo de Ouvidorias Cemig e tente de novo.'); return Promise.resolve(false); }
+    if (manual && !listas.length) { avisar('Nenhuma lista com aba na planilha ainda.'); return Promise.resolve(false); }
     if (sincronizando || !listas.length || !window.Google.conectado()) return Promise.resolve(false);
     sincronizando = true;
     return window.Google.lerPlanilha(linkPlanilhaOuv(), estado.chaveGoogle).then(function (g) {
