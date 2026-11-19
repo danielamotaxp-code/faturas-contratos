@@ -1021,14 +1021,14 @@
   }
   // recarrega as ouvidorias registradas (podem ter entrado novas desde que a página abriu)
   function ouvCarregarRegs() {
-    return new A.Repositorio(estado.repo.token, 'ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] })
-      .then(function (r) { if (r && r.registros) ouv.regs = r.registros; }).catch(function () {});
+    return new A.Repositorio(estado.repo.token, 'danielamotaxp-code/ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] })
+      .then(function (r) { if (r && r.registros && r.registros.length) ouv.regs = r.registros; }).catch(function () {});
   }
   function carregarOuv() {
     $('#ouv-data').value = $('#ouv-data').value || hojeISO();
     return Promise.all([
       estado.repo.lerJSON(ARQ_OUV, { planilha: PLANILHA_OUV_PADRAO, listas: [] }),
-      new A.Repositorio(estado.repo.token, 'ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] }).catch(function () { return { registros: null }; })
+      new A.Repositorio(estado.repo.token, 'danielamotaxp-code/ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] }).catch(function () { return { registros: null }; })
     ]).then(function (r) { ouv.dados = r[0]; ouv.regs = r[1].registros || null; if (!ouv.regs) avisar("Não consegui carregar a lista de ouvidorias da plataforma. Recarregue a página."); renderOuv(); desenharAcomp(); sincronizarPlanilhaOuv(false).then(function () { return sincronizarAcomp(false); }); })
       .catch(function (e) { $('#ouv-listas').innerHTML = '<p class="erro">' + esc(e.message) + '</p>'; });
   }
