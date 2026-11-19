@@ -1102,7 +1102,7 @@
         if (hl < 0) return;
         var cab = m[hl].map(function (h) { return nrm(h); }), ci = cab.indexOf(nrm('Instalação')), cc = cab.indexOf('colaborador');
         var cs = COLS_AUTO.map(function (h) { return cab.indexOf(nrm(h)); });
-        var ultimaCol = cab.length;
+        var ultimaCol = cab.length, primeiraCol = Math.max(0, cab.findIndex(function (h) { return h; })); // pinta só a tabela, não colunas vazias à esquerda
         m.slice(hl + 1).forEach(function (linha, j) {
           var r = regOuv(linha[ci], l.dataISO); if (!r) return;
           var lin = hl + j + 2, quem = r.responsavel || '', pend = r.status === 'pendente';
@@ -1118,7 +1118,7 @@
               fields: 'userEnteredValue,textFormatRuns' } });
             mudou = true;
           }
-          if (mudou) formatos.push({ repeatCell: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: 0, endColumnIndex: ultimaCol },
+          if (mudou) formatos.push({ repeatCell: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: primeiraCol, endColumnIndex: ultimaCol },
             cell: { userEnteredFormat: { backgroundColor: pend ? LARANJA : VERDE } }, fields: 'userEnteredFormat.backgroundColor' } });
           // colunas da ouvidoria centralizadas e sem negrito
           if (mudou) [cc].concat(cs).filter(function (c) { return c >= 0; }).forEach(function (c) {
