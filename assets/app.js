@@ -1006,6 +1006,11 @@
       d.listas = d.listas || []; return mudar(d);
     }, msg + ' (' + estado.nome + ')').then(function (d) { ouv.dados = d; return d; });
   }
+  // recarrega as ouvidorias registradas (podem ter entrado novas desde que a página abriu)
+  function ouvCarregarRegs() {
+    return new A.Repositorio(estado.repo.token, 'ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] })
+      .then(function (r) { if (r && r.registros) ouv.regs = r.registros; }).catch(function () {});
+  }
   function carregarOuv() {
     $('#ouv-data').value = $('#ouv-data').value || hojeISO();
     return Promise.all([
@@ -1041,7 +1046,12 @@
       .then(function () {
         if (!window.Google.conectado()) { msg.textContent = 'Lista salva. Para criar a aba na planilha, clique em "Entrar com Google" e depois em "Criar aba na planilha" na lista.'; return; }
         msg.textContent = 'Criando a aba "' + lista.data + '" na planilha de ouvidorias…';
-        return criarAbaGoogle(lista).then(function () { msg.textContent = 'Lista salva e aba criada na planilha ✓'; })
+        return criarAbaGoogle(lista).then(function () {
+          // já preenche e colore as linhas de quem já tem ouvidoria registrada na plataforma
+          msg.textContent = 'Aba criada. Marcando as ouvidorias já registradas…';
+          return ouvCarregarRegs().then(function () { return sincronizarPlanilhaOuv(false); })
+            .then(function () { msg.textContent = 'Lista salva, aba criada e ouvidorias já registradas marcadas ✓'; });
+        })
           .catch(function (e) { msg.textContent = 'Lista salva, mas não consegui criar a aba: ' + e.message; });
       })
       .then(function () { $('#ouv-link').value = ''; $('#ouv-arquivo').value = ''; mostrarPrevia(); renderOuv(); })
@@ -1155,7 +1165,7 @@
       b.onclick = function (e) {
         e.preventDefault(); var l = ouv.dados.listas.filter(function (x) { return x.id === b.dataset.criar; })[0];
         b.disabled = true; b.textContent = 'Criando…';
-        criarAbaGoogle(l).then(function () { avisar('Aba criada na planilha de ouvidorias.'); renderOuv(); })
+        criarAbaGoogle(l).then(function () { return ouvCarregarRegs().then(function () { return sincronizarPlanilhaOuv(false); }); }).then(function () { avisar('Aba criada na planilha de ouvidorias, com as ouvidorias já registradas marcadas.'); renderOuv(); })
           .catch(function (err) { avisar(err.message); b.disabled = false; b.textContent = 'Criar aba na planilha'; });
       };
     });
