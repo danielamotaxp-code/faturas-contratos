@@ -1073,8 +1073,19 @@
 
   // ouvidorias feitas até 3 dias antes da data da lista também contam (as ouvidorias podem começar antes da aba ser criada)
   function seteDiasAntes(iso) { var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() - 3); return d.toISOString().slice(0, 10); }
+  // data da lista mais antiga em que a instalação aparece: a ouvidoria aberta por causa dela vale para todas as listas seguintes
+  function primeiraListaDe(k) {
+    var menor = '';
+    ((ouv.dados && ouv.dados.listas) || []).forEach(function (l) {
+      var ci = (l.cab || []).findIndex(function (h) { return R.normalizar ? R.normalizar(h) === 'instalacao' : /instala/i.test(h); });
+      if (ci < 0 || !l.dataISO) return;
+      if ((l.linhas || []).some(function (x) { return R.chaveInstalacao(x[ci]) === k; }) && (!menor || l.dataISO < menor)) menor = l.dataISO;
+    });
+    return menor;
+  }
   function regOuv(inst, desde) {
     var k = R.chaveInstalacao(inst); if (!k || !ouv.regs) return null;
+    var p = primeiraListaDe(k); if (p && p < desde) desde = p;
     desde = seteDiasAntes(desde);
     var rs = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && String(r.criadoEm || '').slice(0, 10) >= desde; });
     if (!rs.length) return null;
