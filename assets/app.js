@@ -824,7 +824,7 @@
   // Formato das abas da planilha de ouvidorias (uma aba por data). As 4 últimas colunas a plataforma vai atualizando.
   var COLS_OUV = ['Colaborador', 'Cliente', 'Usina', 'Instalação', 'Unid. Consumidora', 'Mês Referencia', 'CPF / CNPJ', 'Data Vencimento Boleto',
     'Parceiro', 'Associado', 'Status Contrato Faturamento', 'Status Contrato Atual', 'Modalidade da Fatura', 'Status da Fatura', 'Geração de Faturas', 'Classificação'];
-  var COLS_AUTO = ['Ouvidoria', 'Protocolo da ouvidoria', 'Data da ouvidoria', 'Ouvidoria na plataforma', 'Retorno da Cemig'];
+  var COLS_AUTO = ['Ouvidoria', 'Protocolo da ouvidoria', 'Data da ouvidoria', 'Ouvidoria na plataforma'];
   var PORTAL_OUV = 'https://danielamotaxp-code.github.io/central-atendimento/#ouvidorias/cad/';
   var ouv = { dados: null, previa: null, regs: null, filtro: {} };
   function hojeISO() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
@@ -1113,15 +1113,7 @@
         if (hl < 0) return;
         var cab = m[hl].map(function (h) { return nrm(h); }), ci = cab.indexOf(nrm('Instalação')), cc = cab.indexOf('colaborador');
         var cs = COLS_AUTO.map(function (h) { return cab.indexOf(nrm(h)); });
-        var primeiraCol = Math.max(0, cab.findIndex(function (h) { return h; })); // pinta só a tabela, não colunas vazias à esquerda
-        // coluna Retorno da Cemig (Sim/Não): nas abas antigas que não têm, entra no fim do cabeçalho com o mesmo formato
-        if (cs[4] < 0) {
-          cs[4] = cab.length; cab.push(nrm('Retorno da Cemig'));
-          dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(cs[4]) + (hl + 1), values: [['Retorno da Cemig']] });
-          formatos.push({ copyPaste: { source: { sheetId: folha.sheetId, startRowIndex: hl, endRowIndex: m.length, startColumnIndex: cs[4] - 1, endColumnIndex: cs[4] },
-            destination: { sheetId: folha.sheetId, startRowIndex: hl, endRowIndex: m.length, startColumnIndex: cs[4], endColumnIndex: cs[4] + 1 }, pasteType: 'PASTE_FORMAT' } });
-        }
-        var ultimaCol = cab.length;
+        var ultimaCol = cab.length, primeiraCol = Math.max(0, cab.findIndex(function (h) { return h; })); // pinta só a tabela, não colunas vazias à esquerda
         m.slice(hl + 1).forEach(function (linha, j) {
           var r = regOuv(linha[ci], l.dataISO); if (!r) return;
           var lin = hl + j + 2, quem = r.responsavel || '', pend = r.status === 'pendente';
@@ -1130,8 +1122,6 @@
           var mudou = false;
           if (cc >= 0 && !String(linha[cc] || '').trim() && quem) { dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(cc) + lin, values: [[quem]] }); mudou = true; }
           val.forEach(function (v, k) { var c = cs[k]; if (c >= 0 && String(linha[c] == null ? '' : linha[c]) !== v) { dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(c) + lin, values: [[v]] }); mudou = true; } });
-          var txtRet = window.Acompanhamento && window.Acompanhamento.textoRetorno ? window.Acompanhamento.textoRetorno(r) : '';
-          if (cs[4] >= 0 && txtRet && String(linha[cs[4]] == null ? '' : linha[cs[4]]) !== txtRet) { dados.push({ range: window.Google.aspas(l.aba) + '!' + letraCol(cs[4]) + lin, values: [[txtRet]] }); mudou = true; }
           var cl = cs[3];
           if (cl >= 0 && String(linha[cl] || '') !== 'Abrir ouvidoria') {
             formatos.push({ updateCells: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: cl, endColumnIndex: cl + 1 },
