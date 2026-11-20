@@ -1039,7 +1039,12 @@
     return window.Google.lerPlanilha(linkPlanilhaOuv(), estado.chaveGoogle).then(function (g) {
       var nome = lista.data, n = 2;
       while (g.folhas[nome]) nome = lista.data + ' (' + (n++) + ')';
-      return window.Google.escreverAba(g, nome, [lista.cab].concat(lista.linhas)).then(function (sheetId) {
+      return window.Google.escreverAba(g, nome, [lista.cab].concat(lista.linhas), 10).then(function (sheetId) {
+        // contorno em toda a tabela (inclusive Colaborador, Ouvidoria, Protocolo, Data e Abrir ouvidoria); as 10 linhas e colunas a mais ficam em branco
+        var B = { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } };
+        return window.Google.lote(g.id, [{ updateBorders: { range: { sheetId: sheetId, startRowIndex: 0, endRowIndex: lista.linhas.length + 1, startColumnIndex: 0, endColumnIndex: lista.cab.length },
+          top: B, bottom: B, left: B, right: B, innerHorizontal: B, innerVertical: B } }]).then(function () { return sheetId; });
+      }).then(function (sheetId) {
         return salvarOuv(function (d) {
           d.listas.forEach(function (x) { if (x.id === lista.id) { x.aba = nome; x.gid = sheetId; x.planilhaId = g.id; } });
           return d;
@@ -1099,6 +1104,7 @@
    */
   var sincronizando = false;
   var VERDE = { red: 0.204, green: 0.659, blue: 0.325 }, LARANJA = { red: 0.992, green: 0.851, blue: 0.663 };
+  var BORDA = { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } };
   function sincronizarPlanilhaOuv(manual) {
     var listas = ((ouv.dados && ouv.dados.listas) || []).filter(function (l) { return l.aba; });
     if (manual && !window.Google.conectado()) { avisar('Conecte o Google no topo de Ouvidorias Cemig e tente de novo.'); return Promise.resolve(false); }
@@ -1131,6 +1137,11 @@
           }
           if (mudou) formatos.push({ repeatCell: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: primeiraCol, endColumnIndex: ultimaCol },
             cell: { userEnteredFormat: { backgroundColor: pend ? LARANJA : VERDE } }, fields: 'userEnteredFormat.backgroundColor' } });
+          // contorno nas células da ouvidoria (Colaborador, Ouvidoria, Protocolo, Data, Abrir ouvidoria)
+          if (mudou) [cc].concat(cs).filter(function (c) { return c >= 0; }).forEach(function (c) {
+            formatos.push({ updateBorders: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: c, endColumnIndex: c + 1 },
+              top: BORDA, bottom: BORDA, left: BORDA, right: BORDA } });
+          });
           // colunas da ouvidoria centralizadas e sem negrito
           if (mudou) [cc].concat(cs).filter(function (c) { return c >= 0; }).forEach(function (c) {
             formatos.push({ repeatCell: { range: { sheetId: folha.sheetId, startRowIndex: lin - 1, endRowIndex: lin, startColumnIndex: c, endColumnIndex: c + 1 },

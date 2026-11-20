@@ -102,7 +102,7 @@
       var nomes = [], folhas = {};
       (meta.sheets || []).forEach(function (s) {
         nomes.push(s.properties.title);
-        folhas[s.properties.title] = { sheetId: s.properties.sheetId,
+        folhas[s.properties.title] = { sheetId: s.properties.sheetId, colunas: ((s.properties.gridProperties || {}).columnCount) || 0,
           bandas: (s.bandedRanges || []).map(function (b) { return b.bandedRangeId; }) };
       });
       if (!nomes.length) throw new Error('A planilha não tem abas.');
@@ -173,12 +173,13 @@
   }
 
   /** Cria (ou recria) uma aba com os valores informados, como texto exato. */
-  function escreverAba(planilha, titulo, valores) {
+  function escreverAba(planilha, titulo, valores, folga) {
     var id = planilha.id, existente = planilha.folhas[titulo];
     var pedidos = [];
     if (existente) pedidos.push({ deleteSheet: { sheetId: existente.sheetId } });
     var linhas = Math.max(valores.length, 2), colunas = Math.max((valores[0] || []).length, 1);
-    pedidos.push({ addSheet: { properties: { title: titulo, gridProperties: { rowCount: linhas, columnCount: colunas, frozenRowCount: 1 } } } });
+    // folga: linhas e colunas em branco depois da tabela (sem cor, sem borda)
+    pedidos.push({ addSheet: { properties: { title: titulo, gridProperties: { rowCount: linhas + (folga || 0), columnCount: colunas + (folga || 0), frozenRowCount: 1 } } } });
     return chamar(API + id + ':batchUpdate', { method: 'POST', body: JSON.stringify({ requests: pedidos }) }, null, true)
       .then(function (resp) {
         var novo = resp.replies[resp.replies.length - 1].addSheet.properties.sheetId;
