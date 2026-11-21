@@ -216,9 +216,17 @@
     return chamar(API + id + '/values:batchUpdate', { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: dados }) }, null, true);
   }
 
+  /** Cria uma planilha nova no Google e libera para qualquer pessoa com o link editar. */
+  function criarPlanilha(titulo) {
+    return chamar(API.replace(/\/$/, ''), { method: 'POST', body: JSON.stringify({ properties: { title: titulo, locale: 'pt_BR', timeZone: 'America/Sao_Paulo' } }) }, null, true).then(function (p) {
+      return chamar('https://www.googleapis.com/drive/v3/files/' + p.spreadsheetId + '/permissions?supportsAllDrives=true', { method: 'POST', body: JSON.stringify({ role: 'writer', type: 'anyone' }) }, null, true)
+        .catch(function () { /* fica só com quem criou; dá para compartilhar depois */ })
+        .then(function () { return { id: p.spreadsheetId, link: 'https://docs.google.com/spreadsheets/d/' + p.spreadsheetId + '/edit', titulo: titulo, primeira: p.sheets && p.sheets[0] && p.sheets[0].properties.sheetId }; });
+    });
+  }
   var api = {
     planilha: function (id) { return metadados(id); },
     ler: function (id, intervalo) { return chamar(API + id + '/values/' + encodeURIComponent(intervalo) + '?valueRenderOption=FORMATTED_VALUE', {}).then(function (v) { return v.values || []; }); }, lerPlanilha: lerPlanilha, coresAba: coresAba, idDoLink: idDoLink, entrar: entrar, sair: sair, conectado: conectado,
-    pintarAba: pintarAba, escreverAba: escreverAba, filtrarAbas: filtrarAbas, gravarIntervalos: gravarIntervalos, aspas: aspas, lote: lote, corRGB: corRGB };
+    pintarAba: pintarAba, escreverAba: escreverAba, criarPlanilha: criarPlanilha, filtrarAbas: filtrarAbas, gravarIntervalos: gravarIntervalos, aspas: aspas, lote: lote, corRGB: corRGB };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.Google = api;
 })(this);

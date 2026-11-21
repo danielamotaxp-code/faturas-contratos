@@ -195,7 +195,7 @@
           '<button class="btn btn-primario" type="submit">Gerar planilha</button>' +
         '</form>' +
         '<p class="dica dica-link">A planilha precisa estar em <b>Compartilhar → Acesso geral → Qualquer pessoa com o link (Leitor)</b>. Escolha o mês e o ano, ou deixe automático (lido do nome da planilha).</p>' +
-        '<p class="dica dica-arquivo" hidden>O arquivo pode ter qualquer nome: escolha o mês e o ano. A plataforma também atualiza a última planilha do Google enviada por link (com o Google conectado).</p>' +
+        '<p class="dica dica-arquivo" hidden>O arquivo pode ter qualquer nome: escolha o mês e o ano. Com o Google conectado, a semana entra também na planilha do Google do mês.</p>' +
         '<p class="alvo" hidden></p>' +
         '<div class="status" hidden></div>' +
       '</div>' +
@@ -306,34 +306,11 @@
       passo('Conferindo "' + arq.name + '" (Semana ' + sem + ')…');
       return esperarTela().then(function () {
         resultado = P.processar(aba, nomeMes, buf, sem, anteriores);
+        resultado.origemWb = function () { return P.lerArquivo(arq.name, buf); };
         conferirAlvo(aba, resultado);
         resultado.original = new Uint8Array(buf);
         passo('Salvando a planilha enviada e a gerada…');
-        return salvarProcessamento(aba, arq.name, resultado, passo, '').then(function (reg) {
-          // enviada por Excel: atualiza também a última planilha do Google enviada por link (a mais recente desta aba)
-          var comLink = estado.registros.filter(function (r) { return r.aba === aba && r.linkOrigem && r.id !== reg.id; })
-            .sort(function (a, b) { return String(b.criadoEm).localeCompare(String(a.criadoEm)); });
-          var ult = comLink.filter(function (r) { return r.mes === resultado.mes.chave; })[0] || comLink[0]; // de preferência a do mesmo mês
-          if (!ult) { reg.avisoGoogle = 'Nenhuma planilha do Google foi enviada por link ainda, então só o Excel foi salvo.'; return [reg, resultado]; }
-          if (!window.Google.conectado()) { reg.avisoGoogle = 'A planilha do Google não foi atualizada porque o Google não está conectado.'; return [reg, resultado]; }
-          passo('Lendo a última planilha do Google enviada…');
-          return window.Google.lerPlanilha(ult.linkOrigem, estado.chaveGoogle)
-            .then(function (g) {
-              var x = resultado.google;
-              if (aba !== 'faturas' || g.folhas[x.aba]) return atualizarGoogle(aba, g, resultado, reg, passo);
-              // a aba do Excel não existe na planilha do Google: entra como aba nova (Faturas - Semana N) e é pintada lá
-              var titulo = 'Faturas - Semana ' + sem; if (g.folhas[titulo]) titulo += ' (Excel ' + new Date().toLocaleDateString('pt-BR').slice(0, 5) + ')';
-              var wb = P.lerArquivo(arq.name, buffer), ws = wb.Sheets[x.aba];
-              var aoa = window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', blankrows: true });
-              for (var r0 = window.XLSX.utils.decode_range(ws['!ref']).s.r; r0 > 0; r0--) aoa.unshift([]); // mesmas linhas do arquivo
-              passo('Criando a aba "' + titulo + '" na planilha do Google…');
-              return window.Google.escreverAba(g, titulo, aoa)
-                .then(function () { return window.Google.lerPlanilha(ult.linkOrigem, estado.chaveGoogle); })
-                .then(function (g2) { x.aba = titulo; return atualizarGoogle(aba, g2, resultado, reg, passo); });
-            })
-            .catch(function (err) { reg.avisoGoogle = 'Excel salvo, mas não consegui atualizar a planilha do Google: ' + err.message; })
-            .then(function () { return [reg, resultado]; });
-        });
+        return salvarProcessamento(aba, arq.name, resultado, passo, '').then(function (reg) { return [reg, resultado]; }); // a planilha do Google do mês é preenchida em concluir()
       });
     }));
   }
@@ -353,6 +330,7 @@
       return esperarTela().then(function () {
         var wb = P.livroDeAbas(g.nomesAbas, g.abas);
         resultado = P.processarLivro(aba, nomeMes, wb, sem, anteriores);
+        resultado.origemWb = function () { return wb; };
         conferirAlvo(aba, resultado);
         resultado.original = P.gravar(wb);
         passo('Salvando a cópia (Excel) da planilha como estava e a planilha gerada…');
@@ -391,13 +369,17 @@
   function concluir(aba, promessa) {
     var t = TEXTOS[aba], resultado;
     return promessa.then(function (par) {
+      return paraPlanilhaDoMes(aba, par[0], par[1]).then(function () { return par; });
+    }).then(function (par) {
       var reg = par[0]; resultado = par[1];
       var st = mostrarStatus(aba, 'ok', '<b>' + esc(reg.nomeGerado) + '</b> gerada. Semana ' + esc(reg.semana) + ': ' +
         num(reg.semFatura) + ' ' + t.rotSem + ' de ' + num(reg.total) + ' ' + t.rotTotal + '. ' +
         (reg.desconsiderados ? '<br>' + num(reg.desconsiderados) + (aba === 'faturas' ? ' instalações' : ' contratos') + ' desconectados ou inativos ficaram de fora. ' : '') +
         '<button class="btn btn-peq btn-primario" type="button">Baixar planilha gerada</button>' +
         (reg.googleAtualizada ? '<br>✔ Planilha do Google atualizada no mesmo link: ' + esc(reg.googleAtualizada) + '. <a href="' + esc(reg.linkOrigem) + '" target="_blank" rel="noopener">Abrir no Google</a>' : '') +
-        (reg.avisoGoogle ? '<br><span class="aviso-google">' + esc(reg.avisoGoogle) + '</span>' : ''));
+        (reg.avisoGoogle ? '<br><span class="aviso-google">' + esc(reg.avisoGoogle) + '</span>' : '') +
+        (reg.planilhaMes ? '<br>✔ Também na planilha do Google de ' + esc(rotuloMes(reg.mes)) + ' (aba "' + esc(reg.planilhaMes.aba) + '"). <a href="' + esc(reg.planilhaMes.link) + '" target="_blank" rel="noopener">Abrir</a>' : '') +
+        (reg.avisoMes ? '<br><span class="aviso-google">' + esc(reg.avisoMes) + '</span>' : ''));
       $('button', st).addEventListener('click', function () { baixarBytes(resultado.bytes, reg.nomeGerado + '.xlsx', XLSX_MIME); });
       estado.progresso = null;
       renderListas();
@@ -405,6 +387,86 @@
     }).catch(function (err) {
       mostrarStatus(aba, 'falha', esc(err.message));
       return false;
+    });
+  }
+
+  /* ---------- planilha do Google do mês: uma por mês, com todas as semanas (faturas e contratos) ---------- */
+  var ARQ_MESES = 'dados/planilhas-mes.json';
+  function lerMeses() { return estado.repo.lerJSON(ARQ_MESES, { meses: {} }).then(function (d) { estado.meses = d.meses || {}; return estado.meses; }); }
+  function planilhaMes(chave) {
+    return lerMeses().then(function (meses) {
+      if (meses[chave]) return meses[chave];
+      var p = String(chave).split('-'), titulo = 'Faturas e Contratos – ' + MESES[Number(p[1]) - 1] + ' ' + p[0];
+      return window.Google.criarPlanilha(titulo).then(function (nova) {
+        nova.criadaEm = new Date().toISOString(); nova.criadaPor = estado.nome;
+        return estado.repo.atualizarJSON(ARQ_MESES, { meses: {} }, function (d) { d.meses = d.meses || {}; if (!d.meses[chave]) d.meses[chave] = nova; return d; }, 'Planilha do Google de ' + titulo + ' (' + estado.nome + ')')
+          .then(function (d) { estado.meses = d.meses; desenharMeses(); return d.meses[chave]; });
+      });
+    });
+  }
+  /** Escreve uma semana (faturas ou contratos) na planilha do Google do mês: uma aba por semana. */
+  function semanaNoMes(aba, semana, link, resultado) {
+    var x = resultado.google, titulo;
+    return window.Google.lerPlanilha(link, estado.chaveGoogle).then(function (g) {
+      if (aba === 'contratos') { titulo = x.titulo; return window.Google.escreverAba(g, titulo, x.valores, 10).then(function () { return g; }); }
+      titulo = 'Faturas - Semana ' + semana;
+      var wb = resultado.origemWb(), ws = wb.Sheets[x.aba];
+      var aoa = window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', blankrows: true });
+      for (var r0 = window.XLSX.utils.decode_range(ws['!ref']).s.r; r0 > 0; r0--) aoa.unshift([]);
+      return window.Google.escreverAba(g, titulo, aoa, 10)
+        .then(function () { return window.Google.lerPlanilha(link, estado.chaveGoogle); })
+        .then(function (g2) { return window.Google.pintarAba(g2, titulo, x.colunas, x.indices, x.cores).then(function () { return g2; }); });
+    }).then(function (g) {
+      var vazia = ['Página1', 'Sheet1', 'Planilha1'].filter(function (n) { return g.folhas[n]; })[0];
+      if (vazia && Object.keys(g.folhas).length > 1) return window.Google.lote(g.id, [{ deleteSheet: { sheetId: g.folhas[vazia].sheetId } }]).catch(function () {});
+    }).then(function () { return titulo; });
+  }
+  /** Preenche a planilha do mês com as semanas já enviadas (a última de cada semana), refazendo a partir do arquivo enviado. */
+  function preencherMes(chave, exceto) {
+    var pm = (estado.meses || {})[chave]; if (!pm) return Promise.resolve(0);
+    var ult = {};
+    estado.registros.filter(function (r) { return r.mes === chave && r.id !== exceto; }).forEach(function (r) {
+      var k = r.aba + '|' + r.semana; if (!ult[k] || String(r.criadoEm) > String(ult[k].criadoEm)) ult[k] = r;
+    });
+    var lista = Object.keys(ult).map(function (k) { return ult[k]; }).sort(function (a, b) { return a.semana - b.semana; }), n = 0;
+    return lista.reduce(function (p, r) {
+      return p.then(function () {
+        return estado.repo.lerBytes(r.caminhoOrigem).then(function (bytes) {
+          if (!bytes) return;
+          var buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+          return carregarAnteriores(r.aba, { chave: chave }, Number(r.semana)).then(function (ant) {
+            var nome = nomeComMes(r.nomeOrigem, { mes: Number(chave.split('-')[1]), ano: Number(chave.split('-')[0]) });
+            var res = P.processar(r.aba, nome, buf, Number(r.semana), ant);
+            res.origemWb = function () { return P.lerArquivo(r.nomeOrigem, buf); };
+            return semanaNoMes(r.aba, r.semana, pm.link, res).then(function () { n++; });
+          });
+        }).catch(function () { /* uma semana com problema não impede as outras */ });
+      });
+    }, Promise.resolve()).then(function () { return n; });
+  }
+  function paraPlanilhaDoMes(aba, reg, resultado) {
+    if (!window.Google.conectado()) { reg.avisoMes = 'Conecte o Google para a semana entrar também na planilha do Google do mês.'; return Promise.resolve(); }
+    var x = resultado.google, titulo, link, nova = !(estado.meses || {})[reg.mes];
+    return planilhaMes(reg.mes).then(function (pm) {
+      link = pm.link;
+      // mês novo: entram também as semanas que já tinham sido enviadas
+      return (nova ? preencherMes(reg.mes, reg.id) : Promise.resolve()).then(function () { return semanaNoMes(aba, reg.semana, link, resultado); });
+    }).then(function (t) { titulo = t;
+      reg.planilhaMes = { aba: titulo, link: link };
+      return estado.repo.atualizarJSON(ARQ_INDICE, { registros: [] }, function (ind) {
+        (ind.registros || []).forEach(function (r) { if (r.id === reg.id) r.planilhaMes = reg.planilhaMes; });
+        return ind;
+      }, 'Índice: semana na planilha do mês (' + estado.nome + ')').then(function (ind) { estado.registros = ind.registros; });
+    }).catch(function (err) { reg.avisoMes = 'A semana não entrou na planilha do Google do mês: ' + err.message; });
+  }
+  function desenharMeses() { renderListas(); }
+  function desenharMesesAntigo() {
+    var meses = estado.meses || {}, chaves = Object.keys(meses).sort().reverse();
+    $$('.meses-google').forEach(function (el) {
+      el.innerHTML = '<div class="card-titulo"><span class="selo">G</span><h3>Planilha do Google de cada mês</h3></div>' +
+        '<p class="ajuda">Toda semana gerada (faturas e contratos) entra também numa planilha do Google do mês, uma aba por semana. Ela é criada sozinha no primeiro envio do mês (com o Google conectado) e fica aberta para a equipe editar.</p>' +
+        (chaves.length ? '<ul class="lista-meses">' + chaves.map(function (k) { return '<li><b>' + esc(rotuloMes(k)) + ':</b> <a href="' + esc(meses[k].link) + '" target="_blank" rel="noopener">' + esc(meses[k].titulo) + '</a></li>'; }).join('') + '</ul>'
+          : '<p class="vazio">Ainda nenhuma. A do mês é criada no próximo envio.</p>');
     });
   }
 
@@ -489,6 +551,7 @@
   function carregarLista() {
     if (!estado.repo) return;
     $$('.painel .lista').forEach(function (l) { if (!estado.registros.length) l.innerHTML = '<p class="vazio">Carregando…</p>'; });
+    lerMeses().then(desenharMeses).catch(function () { /* sem a lista de meses */ });
     return estado.repo.lerJSON(ARQ_INDICE, { registros: [] }).then(function (ind) {
       estado.registros = ind.registros || [];
       renderListas();
@@ -512,7 +575,7 @@
         '<span><b>' + num(r.comFatura) + '</b> ' + t.rotCom + '</span>' +
         '<span><b>' + num(r.semFatura) + '</b> ' + t.rotSem + '</span></div>' +
       '</div><div class="item-botoes">' +
-      (r.linkOrigem ? '<a class="btn btn-peq" href="' + esc(r.linkOrigem) + '" target="_blank" rel="noopener">Abrir no Google</a>' : '') +
+
       '<button class="btn btn-peq" data-baixar="' + esc(r.caminhoOrigem) + '" data-nome="' + esc(r.nomeOrigem) + '">Baixar enviada</button>' +
       '<button class="btn btn-peq btn-primario" data-baixar="' + esc(r.caminhoGerado) + '" data-nome="' + esc(r.nomeGerado + '.xlsx') + '">Baixar gerada</button>' +
       '<button class="btn btn-peq btn-perigo" data-excluir="' + esc(r.id) + '">Excluir</button>' +
@@ -543,8 +606,11 @@
           (lista.length ? lista.map(function (r) { return itemHtml(r, t); }).join('') : '<p class="semana-vazia">Nenhuma planilha nesta semana.</p>') +
           '</div>';
       }
+      var pm = (estado.meses || {})[mes];
+      var google = '<div class="mes-google">' + (pm ? '📗 <b>Planilha do Google de ' + esc(rotuloMes(mes)) + '</b> (todas as semanas, uma aba por semana): <a class="btn btn-peq btn-primario" href="' + esc(pm.link) + '" target="_blank" rel="noopener">Abrir no Google</a>'
+        : 'Este mês ainda não tem planilha do Google. <button class="btn btn-peq" type="button" data-criar-mes="' + esc(mes) + '">Criar a planilha do Google de ' + esc(rotuloMes(mes)) + '</button> <small>(precisa do Google conectado; entram as semanas já enviadas)</small>') + '</div>';
       return '<details class="mes"' + (i === 0 ? ' open' : '') + '><summary>' + esc(rotuloMes(mes)) +
-        '<small>' + itens.length + (itens.length === 1 ? ' planilha' : ' planilhas') + '</small></summary>' + semanas + '</details>';
+        '<small>' + itens.length + (itens.length === 1 ? ' planilha' : ' planilhas') + '</small></summary>' + google + semanas + '</details>';
     }).join('');
 
     $$('[data-baixar]', el).forEach(function (b) {
@@ -559,6 +625,15 @@
       });
     });
 
+    $$('[data-criar-mes]', el).forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (!window.Google.conectado()) { avisar('Conecte o Google primeiro.'); return; }
+        b.disabled = true; b.textContent = 'Criando e preenchendo…';
+        planilhaMes(b.dataset.criarMes).then(function () { return preencherMes(b.dataset.criarMes); })
+          .then(function (n) { avisar('Planilha do Google do mês criada' + (n ? ' com ' + n + ' semana(s)' : '') + '.'); renderListas(); })
+          .catch(function (e) { avisar('Não consegui criar: ' + e.message); b.disabled = false; });
+      });
+    });
     $$('[data-inserir]', el).forEach(function (b) {
       b.addEventListener('click', function () {
         var painel = $('[data-painel="' + aba + '"]');

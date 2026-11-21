@@ -186,3 +186,6 @@ td.quebra { white-space: normal; min-width: 220px; }
 .ouv-sit.pend { background: #fff4e6; color: #8a4b00; }
 .ouv-sit.nao { background: #eef0f3; color: var(--texto-2); }
 .ouv-filtro { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+
+.lista-meses{margin:6px 0 0 18px;padding:0}.lista-meses li{margin:3px 0}
+.mes-google{margin:8px 0 10px;padding:8px 10px;background:#f2f8f3;border-radius:8px}
