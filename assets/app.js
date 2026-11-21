@@ -188,11 +188,14 @@
           '<input class="campo campo-link" type="url" placeholder="Cole o link da planilha do Google (https://docs.google.com/spreadsheets/d/...)" aria-label="Link da planilha do Google">' +
           '<label class="arquivo" hidden><input type="file" accept=".xlsx,.xls,.xlsm,.ods,.csv">' +
             '<span class="arquivo-texto">' + SEM_ARQUIVO + '</span></label>' +
-          '<label class="semana">Semana <select class="campo">' + opcoes + '</select></label>' +
+          '<label class="semana">Semana <select class="campo sel-semana">' + opcoes + '</select></label>' +
+          '<label class="semana">Mês <select class="campo sel-mes"><option value="">Automático (pelo nome; se não tiver, o mês atual)</option>' +
+            MESES.map(function (m, i) { return '<option value="' + (i + 1) + '">' + m + '</option>'; }).join('') + '</select></label>' +
+          '<label class="semana">Ano <select class="campo sel-ano">' + [-1, 0, 1].map(function (d) { var a = new Date().getFullYear() + d; return '<option value="' + a + '"' + (d === 0 ? ' selected' : '') + '>' + a + '</option>'; }).join('') + '</select></label>' +
           '<button class="btn btn-primario" type="submit">Gerar planilha</button>' +
         '</form>' +
-        '<p class="dica dica-link">A planilha precisa estar em <b>Compartilhar → Acesso geral → Qualquer pessoa com o link (Leitor)</b>. O mês é lido do nome da planilha.</p>' +
-        '<p class="dica dica-arquivo" hidden>No Google Planilhas: <b>Arquivo → Fazer download → Microsoft Excel (.xlsx)</b>. Assim todas as abas vão juntas.</p>' +
+        '<p class="dica dica-link">A planilha precisa estar em <b>Compartilhar → Acesso geral → Qualquer pessoa com o link (Leitor)</b>. Escolha o mês e o ano, ou deixe automático (lido do nome da planilha).</p>' +
+        '<p class="dica dica-arquivo" hidden>O arquivo pode ter qualquer nome: escolha o mês e o ano. A plataforma também atualiza a última planilha do Google enviada por link (com o Google conectado).</p>' +
         '<p class="alvo" hidden></p>' +
         '<div class="status" hidden></div>' +
       '</div>' +
@@ -231,10 +234,11 @@
       }
       var btn = $('button[type="submit"]', e.target);
       btn.disabled = true;
-      var semana = $('select', e.target).value;
-      (porLink ? enviarLink(aba, link, semana) : enviarArquivo(aba, input.files[0], semana)).then(function (ok) {
+      var semana = $('.sel-semana', e.target).value, mesSel = $('.sel-mes', e.target).value, anoSel = $('.sel-ano', e.target).value;
+      var escolha = mesSel ? { mes: Number(mesSel), ano: Number(anoSel) } : null;
+      (porLink ? enviarLink(aba, link, semana, escolha) : enviarArquivo(aba, input.files[0], semana, escolha)).then(function (ok) {
         if (ok) {
-          e.target.reset(); rotulo.textContent = SEM_ARQUIVO; caixa.classList.remove('escolhido');
+          e.target.reset(); $('.sel-ano', e.target).value = String(new Date().getFullYear()); rotulo.textContent = SEM_ARQUIVO; caixa.classList.remove('escolhido');
           estado.alvo[aba] = null; $('.alvo', el).hidden = true;
         }
       }).then(function () { btn.disabled = false; });
@@ -262,6 +266,12 @@
     }
   }
 
+  /** Nome usado para saber o mês: o mês/ano escolhidos vêm na frente; sem escolha e sem mês no nome, vale o mês atual. */
+  function nomeComMes(nome, escolha) {
+    if (escolha && escolha.mes) return R.MESES_NOME[escolha.mes - 1] + ' ' + escolha.ano + ' – ' + nome;
+    if (R.mesDoNome(nome)) return nome;
+    var h = new Date(); return R.MESES_NOME[h.getMonth()] + ' ' + h.getFullYear() + ' – ' + nome;
+  }
   /** Semana do envio: a escolhida, ou a calculada pela data de hoje (dias 1–7 = 1, 8–14 = 2, 15–21 = 3, 22+ = 4). */
   function semanaDoEnvio(escolhida) { return Number(escolhida) || R.semanaDaData(new Date()); }
 
@@ -283,42 +293,54 @@
   }
 
   /** Lê o arquivo, confere, gera e salva. Devolve true se deu certo. */
-  function enviarArquivo(aba, arq, semana) {
-    var passo = passoDe(aba), resultado;
+  function enviarArquivo(aba, arq, semana, escolha) {
+    var passo = passoDe(aba), resultado, nomeMes = nomeComMes(arq.name, escolha);
     passo('Lendo e conferindo "' + arq.name + '"…');
     var sem = semanaDoEnvio(semana), buffer;
     return concluir(aba, arq.arrayBuffer().then(function (buf) {
       buffer = buf;
       passo('Juntando as semanas anteriores do mês…');
-      return carregarAnteriores(aba, R.mesDoNome(arq.name), sem);
+      return carregarAnteriores(aba, R.mesDoNome(nomeMes), sem);
     }).then(function (anteriores) {
       var buf = buffer;
       passo('Conferindo "' + arq.name + '" (Semana ' + sem + ')…');
       return esperarTela().then(function () {
-        resultado = P.processar(aba, arq.name, buf, sem, anteriores);
+        resultado = P.processar(aba, nomeMes, buf, sem, anteriores);
         conferirAlvo(aba, resultado);
         resultado.original = new Uint8Array(buf);
         passo('Salvando a planilha enviada e a gerada…');
-        return salvarProcessamento(aba, arq.name, resultado, passo, '').then(function (reg) { return [reg, resultado]; });
+        return salvarProcessamento(aba, arq.name, resultado, passo, '').then(function (reg) {
+          // enviada por Excel: atualiza também a última planilha do Google enviada por link (a mais recente desta aba)
+          var comLink = estado.registros.filter(function (r) { return r.aba === aba && r.linkOrigem && r.id !== reg.id; })
+            .sort(function (a, b) { return String(b.criadoEm).localeCompare(String(a.criadoEm)); });
+          var ult = comLink.filter(function (r) { return r.mes === resultado.mes.chave; })[0] || comLink[0]; // de preferência a do mesmo mês
+          if (!ult) { reg.avisoGoogle = 'Nenhuma planilha do Google foi enviada por link ainda, então só o Excel foi salvo.'; return [reg, resultado]; }
+          if (!window.Google.conectado()) { reg.avisoGoogle = 'A planilha do Google não foi atualizada porque o Google não está conectado.'; return [reg, resultado]; }
+          passo('Lendo a última planilha do Google enviada…');
+          return window.Google.lerPlanilha(ult.linkOrigem, estado.chaveGoogle)
+            .then(function (g) { return atualizarGoogle(aba, g, resultado, reg, passo); })
+            .catch(function (err) { reg.avisoGoogle = 'Excel salvo, mas não consegui atualizar a planilha do Google: ' + err.message; })
+            .then(function () { return [reg, resultado]; });
+        });
       });
     }));
   }
 
   /** Lê a planilha pelo link do Google, confere, gera e salva. */
-  function enviarLink(aba, link, semana) {
-    var passo = passoDe(aba), resultado;
+  function enviarLink(aba, link, semana, escolha) {
+    var passo = passoDe(aba), resultado, nomeMes;
     passo('Lendo a planilha no Google Planilhas…');
     var sem = semanaDoEnvio(semana), planilha;
     return concluir(aba, window.Google.lerPlanilha(link, estado.chaveGoogle).then(function (g) {
-      planilha = g;
+      planilha = g; nomeMes = nomeComMes(g.titulo, escolha);
       passo('Juntando as semanas anteriores do mês…');
-      return carregarAnteriores(aba, R.mesDoNome(g.titulo), sem);
+      return carregarAnteriores(aba, R.mesDoNome(nomeMes), sem);
     }).then(function (anteriores) {
       var g = planilha;
       passo('Conferindo "' + g.titulo + '" (Semana ' + sem + ')…');
       return esperarTela().then(function () {
         var wb = P.livroDeAbas(g.nomesAbas, g.abas);
-        resultado = P.processarLivro(aba, g.titulo, wb, sem, anteriores);
+        resultado = P.processarLivro(aba, nomeMes, wb, sem, anteriores);
         conferirAlvo(aba, resultado);
         resultado.original = P.gravar(wb);
         passo('Salvando a cópia (Excel) da planilha como estava e a planilha gerada…');
@@ -529,12 +551,13 @@
       b.addEventListener('click', function () {
         var painel = $('[data-painel="' + aba + '"]');
         estado.alvo[aba] = { mes: b.dataset.mes, semana: b.dataset.inserir };
-        $('form select', painel).value = b.dataset.inserir;
+        $('form .sel-semana', painel).value = b.dataset.inserir;
+        var pm = String(b.dataset.mes).split('-'); $('form .sel-mes', painel).value = String(Number(pm[1])); $('form .sel-ano', painel).value = pm[0];
         var alvo = $('.alvo', painel);
         alvo.hidden = false;
         alvo.innerHTML = 'Inserindo na <b>Semana ' + esc(b.dataset.inserir) + '</b> de <b>' + esc(rotuloMes(b.dataset.mes)) +
           '</b>. Cole o link ou escolha o arquivo e clique em Gerar planilha. <button type="button" class="btn btn-link">Cancelar</button>';
-        $('button', alvo).addEventListener('click', function () { estado.alvo[aba] = null; alvo.hidden = true; $('form select', painel).value = ''; });
+        $('button', alvo).addEventListener('click', function () { estado.alvo[aba] = null; alvo.hidden = true; $('form .sel-semana', painel).value = ''; $('form .sel-mes', painel).value = ''; });
         $('.card', painel).scrollIntoView({ behavior: 'smooth', block: 'start' });
         var campo = estado.modo[aba] === 'link' ? $('.campo-link', painel) : null;
         if (campo) setTimeout(function () { campo.focus(); }, 300);
