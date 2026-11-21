@@ -318,7 +318,19 @@
           if (!window.Google.conectado()) { reg.avisoGoogle = 'A planilha do Google não foi atualizada porque o Google não está conectado.'; return [reg, resultado]; }
           passo('Lendo a última planilha do Google enviada…');
           return window.Google.lerPlanilha(ult.linkOrigem, estado.chaveGoogle)
-            .then(function (g) { return atualizarGoogle(aba, g, resultado, reg, passo); })
+            .then(function (g) {
+              var x = resultado.google;
+              if (aba !== 'faturas' || g.folhas[x.aba]) return atualizarGoogle(aba, g, resultado, reg, passo);
+              // a aba do Excel não existe na planilha do Google: entra como aba nova (Faturas - Semana N) e é pintada lá
+              var titulo = 'Faturas - Semana ' + sem; if (g.folhas[titulo]) titulo += ' (Excel ' + new Date().toLocaleDateString('pt-BR').slice(0, 5) + ')';
+              var wb = P.lerArquivo(arq.name, buffer), ws = wb.Sheets[x.aba];
+              var aoa = window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', blankrows: true });
+              for (var r0 = window.XLSX.utils.decode_range(ws['!ref']).s.r; r0 > 0; r0--) aoa.unshift([]); // mesmas linhas do arquivo
+              passo('Criando a aba "' + titulo + '" na planilha do Google…');
+              return window.Google.escreverAba(g, titulo, aoa)
+                .then(function () { return window.Google.lerPlanilha(ult.linkOrigem, estado.chaveGoogle); })
+                .then(function (g2) { x.aba = titulo; return atualizarGoogle(aba, g2, resultado, reg, passo); });
+            })
             .catch(function (err) { reg.avisoGoogle = 'Excel salvo, mas não consegui atualizar a planilha do Google: ' + err.message; })
             .then(function () { return [reg, resultado]; });
         });
