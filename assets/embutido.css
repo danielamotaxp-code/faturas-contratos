@@ -2,3 +2,23 @@
 html.plat-embutido .topo .marca, html.plat-embutido #nome-usuario, html.plat-embutido #btn-sair { display: none; }
 html.plat-embutido .topo { justify-content: flex-end; padding-top: 8px; padding-bottom: 8px; }
 html.plat-embutido:root { --azul: #d23c80; --azul-escuro: #a82a63; --azul-claro: #fde3ee; --azul-medio: #e46fa3; }
+
+/* ===== tema escuro (classe "escuro" vem do portal: Minha conta → Escuro, ou Automático com o computador no escuro) ===== */
+html.escuro:root { color-scheme: dark;
+  --fundo: #12161b; --card: #1a2027; --borda: #2e3843; --texto: #e6ebf0; --texto-2: #b2bdc9; --texto-3: #8693a1;
+  --azul: #d23c80; --azul-escuro: #e46fa3; --azul-claro: #3a1a2a; --azul-medio: #f08bb8; --verde: #7fd09a; --vermelho: #ff8f86; }
+html.escuro body { background: var(--fundo); color: var(--texto); }
+html.escuro .btn, html.escuro .segmentado button, html.escuro .item, html.escuro .semana-bloco,
+html.escuro .login-card input, html.escuro .login-card select, html.escuro .campo, html.escuro input, html.escuro select, html.escuro textarea { background: #1a2027; color: var(--texto); border-color: var(--borda); }
+html.escuro .btn:hover { background: #222a33; }
+html.escuro .btn-primario, html.escuro .segmentado button.ativo { background: var(--azul); border-color: var(--azul); color: #fff; }
+html.escuro .btn-perigo.confirmar { background: #b3261e; border-color: #b3261e; color: #fff; }
+html.escuro .mes, html.escuro th, html.escuro .semana-topo, html.escuro .arquivo, html.escuro .passos code, html.escuro .mes-google { background: #222a33; border-color: var(--borda); color: var(--texto); }
+html.escuro .arquivo { border-color: #3a4654; color: var(--texto-2); }
+html.escuro .status.ok, html.escuro .tag-ok, html.escuro .ouv-sit.ok, html.escuro .btn-google.conectado, html.escuro .ouv-gbar.ok { background: #173022; color: #9fe0b8; border-color: #2f6a47; }
+html.escuro .status.falha, html.escuro .tag-pendente { background: #3b1d1b; color: #ff8f86; }
+html.escuro .ouv-sit.pend, html.escuro .ouv-gbar.nao { background: #3a2e12; color: #ffd27a; border-color: #6b5320; }
+html.escuro .ouv-chip.cinza, html.escuro .ouv-sit.nao { background: #2a323c; color: var(--texto-2); }
+html.escuro .grafico .grade { stroke: #2e3843; }
+html.escuro .tooltip, html.escuro .aviso { background: #e6ebf0; color: #12161b; }
+html.escuro a { color: #f08bb8; }
