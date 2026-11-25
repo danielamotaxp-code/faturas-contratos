@@ -392,9 +392,9 @@
 
   /* ---------- planilha do Google do mês: uma por mês, com todas as semanas (faturas e contratos) ---------- */
   var ARQ_MESES = 'dados/planilhas-mes.json';
-  function lerMeses() { return estado.repo.lerJSON(ARQ_MESES, { meses: {} }).then(function (d) { estado.meses = d.meses || {}; return estado.meses; }); }
+  function lerPlanilhasMes() { return estado.repo.lerJSON(ARQ_MESES, { meses: {} }).then(function (d) { estado.meses = d.meses || {}; return estado.meses; }); }
   function planilhaMes(chave) {
-    return lerMeses().then(function (meses) {
+    return lerPlanilhasMes().then(function (meses) {
       if (meses[chave]) return meses[chave];
       var p = String(chave).split('-'), titulo = 'Faturas e Contratos – ' + MESES[Number(p[1]) - 1] + ' ' + p[0];
       return window.Google.criarPlanilha(titulo).then(function (nova) {
@@ -551,7 +551,7 @@
   function carregarLista() {
     if (!estado.repo) return;
     $$('.painel .lista').forEach(function (l) { if (!estado.registros.length) l.innerHTML = '<p class="vazio">Carregando…</p>'; });
-    lerMeses().then(desenharMeses).catch(function () { /* sem a lista de meses */ });
+    lerPlanilhasMes().then(desenharMeses).catch(function () { /* sem a lista de meses */ });
     return estado.repo.lerJSON(ARQ_INDICE, { registros: [] }).then(function (ind) {
       estado.registros = ind.registros || [];
       renderListas();
