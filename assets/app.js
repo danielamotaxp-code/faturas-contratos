@@ -1490,8 +1490,16 @@
     if (window.Google && window.Google.conectado && window.Google.conectado()) return window.Google; // Google conectado nesta página
     return null;
   }
+  // a planilha Ouvidorias Solicitadas sempre aparece aqui: cada pedido fica verde pela ouvidoria do mesmo mês de referência pedido
+  var SOLICITADAS = { nome: 'Ouvidorias Solicitadas', link: 'https://docs.google.com/spreadsheets/d/1047uWdkcBKOpBdrC4FjjQgEOLpg4ZlzaSZa6IopYKEc/edit', colorir: true, reclamacoes: [], desde: '2026-10-01', fixa: true };
+  function ehSolicitadas(p) { return /1047uWdkcBKOpBdrC4FjjQgEOLpg4ZlzaSZa6IopYKEc/.test(p.link || ''); }
+  function acompComSolicitadas() {
+    var ps = ((ouv.dados && ouv.dados.acompanhadas) || []).slice();
+    if (!ps.some(ehSolicitadas)) ps.push(SOLICITADAS); // no fim, para não mudar a posição das outras (Editar usa a posição)
+    return ps;
+  }
   function desenharAcomp() {
-    var box = $('#ouv-acomp'), ps = (ouv.dados && ouv.dados.acompanhadas) || [], ms = mesesR6();
+    var box = $('#ouv-acomp'), ps = acompComSolicitadas(), ms = mesesR6();
     var linhasMes = ms.map(function (m, i) {
       var nl = ((ouv.dados && ouv.dados.listas) || []).filter(function (l) { var x = mesDaLista(l); return x && x.id === m.id; }).length;
       return '<tr><td class="cl"><a href="' + esc(m.link) + '" target="_blank" rel="noopener">' + esc(m.nome) + '</a>' + (m.atual ? ' <span class="ouv-chip" style="background:#e7f4ec;color:#1d5a37">recebe as listas novas</span>' : '') + '</td>' +
@@ -1505,9 +1513,9 @@
         var u = ouv.ultimaAcomp && ouv.ultimaAcomp[p.nome];
         return '<tr><td class="cl"><a href="' + esc(p.link) + '" target="_blank" rel="noopener">' + esc(p.nome) + '</a></td>' +
           '<td>' + ((p.reclamacoes || []).length ? p.reclamacoes.join(', ') : 'Pela coluna da planilha') + '</td>' +
-          '<td>' + (p.colorir ? 'Sim (verde / laranja)' : 'Não (mantém as cores)') + '</td><td>' + esc(p.meses && p.meses.length ? textoMeses(p.meses) : '— escolha —') + '</td>' +
+          '<td>' + (p.colorir ? 'Sim (verde / laranja)' : 'Não (mantém as cores)') + '</td><td>' + esc(ehSolicitadas(p) ? 'O mês de cada pedido' : (p.meses && p.meses.length ? textoMeses(p.meses) : '— escolha —')) + '</td>' +
           '<td>' + (u ? (u.erro ? '<span class="erro">' + esc(u.erro) + '</span>' : num(u.linhas) + ' linha(s) atualizada(s)') : '—') + '</td>' +
-          '<td><button class="btn btn-peq" type="button" data-acomp-per="' + i + '">📅 Mês de referência</button> <button class="btn btn-link btn-peq" type="button" data-acomp-ed="' + i + '">Editar</button> <button class="btn btn-link btn-peq" type="button" data-acomp-del="' + i + '">Tirar</button></td></tr>';
+          '<td>' + (ehSolicitadas(p) ? '<span class="dica" style="margin:0">Pedido de outubro só fica verde com ouvidoria de outubro</span>' : '<button class="btn btn-peq" type="button" data-acomp-per="' + i + '">📅 Mês de referência</button> <button class="btn btn-link btn-peq" type="button" data-acomp-ed="' + i + '">Editar</button> <button class="btn btn-link btn-peq" type="button" data-acomp-del="' + i + '">Tirar</button>') + '</td></tr>';
       }).join('') + '</tbody></table></div>' : '<p class="vazio">Nenhuma planilha ainda.</p>';
     $$('[data-acomp-ed]', box).forEach(function (b) { b.onclick = function () { editarAcomp(+b.dataset.acompEd); }; });
     // planilhas do mês (Reclamação 6)
@@ -1576,7 +1584,7 @@
   }
   var sincAcomp = false;
   function sincronizarAcomp(manual) {
-    var ps = (ouv.dados && ouv.dados.acompanhadas) || [], g = gPortal(), msg = $('#ouv-acomp-msg');
+    var ps = acompComSolicitadas(), g = gPortal(), msg = $('#ouv-acomp-msg');
     if (!ps.length || sincAcomp || !window.Acompanhamento) return Promise.resolve();
     if (!ouv.regs || !ouv.regs.length) { if (manual) msg.textContent = 'A lista de ouvidorias da plataforma ainda não carregou. Espere um instante e tente de novo.'; return Promise.resolve(); }
     if (!g) { if (manual) msg.textContent = 'Clique em "Conectar Google" (lá em cima, nesta aba) para atualizar as planilhas.'; return Promise.resolve(); }
