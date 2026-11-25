@@ -110,15 +110,16 @@
         <div class="card ouv-gbar" id="ouv-gbar"></div>
         <div class="card">
           <div class="card-titulo"><span class="selo">O</span><h2>Ouvidorias das faturas (Reclamação 6)</h2></div>
-          <p class="ajuda">Processo: 1) gerar Faturas Pendentes e Contratos sem Faturas; 2) a Paula ou a Ytala auditam, e as faturas são lançadas manualmente ou classificadas como sem saldo de geração; 3) aqui, a planilha auditada vira uma aba com a data na planilha de ouvidorias; 4) quando alguém registra a ouvidoria do cliente em Ouvidorias Cemig, a linha dele nessa aba é atualizada sozinha: colaborador, situação, protocolo, linha em verde e o link <b>Abrir ouvidoria</b> para ver o cadastro na plataforma.</p>
+          <p class="ajuda">Processo: 1) gerar Faturas Pendentes e Contratos sem Faturas; 2) a Paula ou a Ytala auditam, e as faturas são lançadas manualmente ou classificadas como sem saldo de geração; 3) aqui, a planilha auditada vira uma aba com a data na planilha de ouvidorias do mês (uma planilha para cada mês); 4) quando alguém registra a ouvidoria do cliente em Ouvidorias Cemig, a linha dele nessa aba é atualizada sozinha: colaborador, situação, protocolo, linha em verde e o link <b>Abrir ouvidoria</b> para ver o cadastro na plataforma.</p>
           <div class="ouv-planilha" id="ouv-planilha"></div>
         </div>
         <div class="card" style="margin-top:14px">
           <div class="card-titulo"><span class="selo">+</span><h3>Nova lista de ouvidorias</h3></div>
-          <p class="ajuda">Coloque a planilha <b>auditada</b> (depois de gerar as faturas e classificar na última coluna: lançamento manual do boleto ou sem saldo de geração). Pode ser pelo link do Google Planilhas ou pelo arquivo do Excel. A plataforma pega só quem foi classificado e cria, na planilha de ouvidorias (sempre a mesma), uma <b>aba nova com a data</b>, com a coluna <b>Colaborador</b>.</p>
+          <p class="ajuda">Coloque a planilha <b>auditada</b> (depois de gerar as faturas e classificar na última coluna: lançamento manual do boleto ou sem saldo de geração). Pode ser pelo link do Google Planilhas ou pelo arquivo do Excel. A plataforma pega só quem foi classificado e cria, na planilha de ouvidorias do mês escolhido, uma <b>aba nova com a data</b>, com a coluna <b>Colaborador</b>.</p>
           <div class="ouv-form"><input type="url" id="ouv-link" class="campo campo-link" placeholder="Link da planilha auditada (Google Planilhas)"><button class="btn" type="button" id="ouv-ler-link">Ler planilha</button></div>
           <div class="ouv-form">
             <label>Data da lista <input type="date" id="ouv-data" class="campo"></label>
+            <label>Vai para a planilha <select id="ouv-mes" class="campo" style="width:auto"></select></label>
             <label class="ouv-arq">ou arquivo do Excel <input type="file" id="ouv-arquivo" accept=".xlsx,.xls,.csv"></label>
           </div>
           <div id="ouv-previa"></div>
@@ -128,11 +129,12 @@
           </div>
         </div>
         <div class="card" style="margin-top:14px">
-          <div class="card-titulo"><span class="selo">+</span><h3>Outras planilhas de ouvidorias</h3></div>
-          <p class="ajuda">Planilhas que a equipe já mantém (ex.: Auditoria Clientes Thiago, Reclamação 7, Ouvidorias Solicitadas). A plataforma não cria linhas: só atualiza os clientes que estão nelas, pela instalação, com o protocolo (ou "Erro"), o colaborador e o link <b>Abrir ouvidoria</b>. Se a planilha tem uma coluna com "Reclamação N", só vale a ouvidoria daquela reclamação. Também atualiza na hora quando alguém registra a ouvidoria em Ouvidorias Cemig.</p>
+          <div class="card-titulo"><span class="selo">+</span><h3>Planilhas de ouvidorias</h3></div>
+          <p class="ajuda"><b>Reclamação 6:</b> uma planilha para cada mês (ex.: Ouvidorias Faturas Outubro – Reclamação 6), com as listas por data em abas. Para começar um mês novo, clique em <b>+ Nova planilha do mês (Reclamação 6)</b>. Em <b>📅 Período</b>, escolha de quando até quando puxar as ouvidorias registradas no site.<br><b>Outras planilhas:</b> planilhas que a equipe já mantém (ex.: Auditoria Clientes Thiago, Reclamação 7, Ouvidorias Solicitadas). A plataforma não cria linhas: só atualiza os clientes que estão nelas, pela instalação, com o protocolo (ou "Erro"), o colaborador e o link <b>Abrir ouvidoria</b>. Se a planilha tem uma coluna com "Reclamação N", só vale a ouvidoria daquela reclamação. Também atualiza na hora quando alguém registra a ouvidoria em Ouvidorias Cemig.</p>
           <div id="ouv-acomp"></div>
           <div class="filtros" style="margin-top:10px">
-            <button class="btn btn-peq" type="button" id="ouv-acomp-novo">+ Adicionar planilha</button>
+            <button class="btn btn-peq" type="button" id="ouv-mes-novo">+ Nova planilha do mês (Reclamação 6)</button>
+            <button class="btn btn-peq" type="button" id="ouv-acomp-novo">+ Adicionar outra planilha</button>
             <button class="btn btn-peq btn-primario" type="button" id="ouv-acomp-sinc">Atualizar essas planilhas agora</button>
             <span class="dica" id="ouv-acomp-msg" style="margin:0"></span>
           </div>
@@ -173,6 +175,6 @@
   <script src="assets/google.js?v=202611211900"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="/central-atendimento/kit/acompanhamento.js?v=202611251200"></script>
-  <script src="assets/app.js?v=202611251200"></script>
+  <script src="assets/app.js?v=202611251215"></script>
 </body>
 </html>

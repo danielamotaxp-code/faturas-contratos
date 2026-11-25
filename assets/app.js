@@ -1071,7 +1071,26 @@
     }).catch(function (e) { $('#ouv-previa').innerHTML = '<p class="erro">Não consegui ler o arquivo: ' + esc(e.message) + '</p>'; });
   });
 
-  function linkPlanilhaOuv() { return (ouv.dados && ouv.dados.planilha) || PLANILHA_OUV_PADRAO; }
+  /* ---------- Reclamação 6: uma planilha por mês (cada uma com as suas listas por data) ---------- */
+  // a planilha que existia (uma só) vira a de Outubro, com o período da rodada de setembro/outubro
+  function migrarMeses(d) {
+    d.listas = d.listas || [];
+    if (!d.mesesR6 || !d.mesesR6.length) {
+      d.mesesR6 = [{ id: 'r6-2026-10', nome: 'Ouvidorias Faturas Outubro – Reclamação 6', link: d.planilha || PLANILHA_OUV_PADRAO, desde: '2026-11-14', ate: '2026-11-24', atual: true }];
+    }
+    if (!d.mesesR6.some(function (m) { return m.atual; })) d.mesesR6[d.mesesR6.length - 1].atual = true;
+    return d;
+  }
+  function mesesR6() { return (ouv.dados && ouv.dados.mesesR6) || []; }
+  function idPlan(link) { return (String(link || '').match(/\/d\/([\w-]+)/) || [])[1] || ''; }
+  function mesAtual() { var ms = mesesR6(); return ms.filter(function (m) { return m.atual; })[0] || ms[ms.length - 1] || null; }
+  // planilha do mês de uma lista: a escolhida ao criar; nas listas antigas, pela planilha onde a aba foi criada
+  function mesDaLista(l) {
+    var ms = mesesR6();
+    return ms.filter(function (m) { return m.id === l.mes; })[0] ||
+      ms.filter(function (m) { return l.planilhaId && idPlan(m.link) === l.planilhaId; })[0] || ms[0] || null;
+  }
+  function linkPlanilhaOuv(l) { var m = l ? mesDaLista(l) : mesAtual(); return (m && m.link) || (ouv.dados && ouv.dados.planilha) || PLANILHA_OUV_PADRAO; }
   // a faixa do Google acompanha a conexão feita em qualquer página do portal
   var gAntes = null;
   setInterval(function () {
@@ -1083,9 +1102,8 @@
   }, 3000);
   var sincBotao = { rodando: false, msg: '' };
   function desenharPlanilhaOuv() {
-    var l = linkPlanilhaOuv();
-    $('#ouv-planilha').innerHTML = '📗 Planilha de ouvidorias: <a href="' + esc(l) + '" target="_blank" rel="noopener">Ouvidorias Faturas – Reclamação 6</a>' +
-      ' <button class="btn btn-link btn-peq" type="button" id="ouv-trocar">Trocar link</button>' +
+    var ma = mesAtual();
+    $('#ouv-planilha').innerHTML = (ma ? '📗 As listas novas vão para: <b>' + esc(ma.nome) + '</b> (as planilhas de cada mês ficam em "Planilhas de ouvidorias", abaixo).' : '') +
       (window.Google.conectado() ? ' <button class="btn btn-peq" type="button" id="ouv-sinc"' + (sincBotao.rodando ? ' disabled>Atualizando…' : '>Atualizar a planilha agora') + '</button>' +
         ' <span id="ouv-sinc-st" style="margin-left:8px;font-size:.9rem">' + esc(sincBotao.msg) + '</span>' : '');
     // conexão com o Google, em destaque no topo da aba
@@ -1117,16 +1135,17 @@
           var gb = $('#ouv-gbar'); if (gb) gb.insertAdjacentHTML('beforeend', '<p class="erro" style="flex-basis:100%;margin:4px 0 0">' + esc(msg) + '</p>');
         });
     };
-    $('#ouv-trocar').onclick = function () {
-      var novo = window.prompt('Link da planilha de ouvidorias (Google Planilhas):', l);
-      if (novo == null) return; novo = novo.trim();
-      if (!/\/spreadsheets\/d\//.test(novo)) { avisar('Esse não parece um link do Google Planilhas.'); return; }
-      salvarOuv(function (d) { d.planilha = novo; return d; }, 'Ouvidorias: link da planilha').then(renderOuv);
-    };
+    // escolha da planilha do mês no formulário da nova lista
+    var sel = $('#ouv-mes');
+    if (sel) {
+      var val = sel.value;
+      sel.innerHTML = mesesR6().map(function (m) { return '<option value="' + esc(m.id) + '">' + esc(m.nome) + '</option>'; }).join('');
+      sel.value = val && mesesR6().some(function (m) { return m.id === val; }) ? val : (ma ? ma.id : '');
+    }
   }
   function salvarOuv(mudar, msg) {
     return estado.repo.atualizarJSON(ARQ_OUV, { planilha: PLANILHA_OUV_PADRAO, listas: [] }, function (d) {
-      d.listas = d.listas || []; return mudar(d);
+      migrarMeses(d); return mudar(d);
     }, msg + ' (' + estado.nome + ')').then(function (d) { ouv.dados = d; return d; });
   }
   // recarrega as ouvidorias registradas (podem ter entrado novas desde que a página abriu)
@@ -1139,14 +1158,14 @@
     return Promise.all([
       estado.repo.lerJSON(ARQ_OUV, { planilha: PLANILHA_OUV_PADRAO, listas: [] }),
       new A.Repositorio(estado.repo.token, 'danielamotaxp-code/ouvidorias-cemig-dados').lerJSON('registros.json', { registros: [] }).catch(function () { return { registros: null }; })
-    ]).then(function (r) { ouv.dados = r[0]; ouv.regs = r[1].registros || null; if (!ouv.regs) avisar("Não consegui carregar a lista de ouvidorias da plataforma. Recarregue a página."); renderOuv(); desenharAcomp(); sincronizarPlanilhaOuv(false).then(function () { return sincronizarAcomp(false); }); })
+    ]).then(function (r) { ouv.dados = migrarMeses(r[0] || {}); ouv.regs = r[1].registros || null; if (!ouv.regs) avisar("Não consegui carregar a lista de ouvidorias da plataforma. Recarregue a página."); renderOuv(); desenharAcomp(); sincronizarPlanilhaOuv(false).then(function () { return sincronizarAcomp(false); }); })
       .catch(function (e) { $('#ouv-listas').innerHTML = '<p class="erro">' + esc(e.message) + '</p>'; });
   }
 
   /** Cria a aba com a data na planilha de ouvidorias (se já existir uma aba com esse nome, usa "(2)", "(3)"…). */
   function criarAbaGoogle(lista) {
     if (!window.Google.conectado()) return Promise.reject(new Error('Clique em "Entrar com Google" no topo para criar a aba na planilha.'));
-    return window.Google.lerPlanilha(linkPlanilhaOuv(), estado.chaveGoogle).then(function (g) {
+    return window.Google.lerPlanilha(linkPlanilhaOuv(lista), estado.chaveGoogle).then(function (g) {
       var nome = lista.data, n = 2;
       while (g.folhas[nome]) nome = lista.data + ' (' + (n++) + ')';
       return window.Google.escreverAba(g, nome, [lista.cab].concat(lista.linhas), 10).then(function (sheetId) {
@@ -1167,8 +1186,8 @@
     var t = ouv.previa, btn = this, msg = $('#ouv-msg');
     if (!t) return;
     var iso = $('#ouv-data').value || hojeISO();
-    var per = pedirPeriodo('desta lista', seteDiasAntes(iso), ''); if (!per) return;
-    var lista = { id: carimbo(new Date()), dataISO: iso, data: isoParaBR(iso), desde: per.desde, ate: per.ate,
+    var mesEsc = ($('#ouv-mes') && $('#ouv-mes').value) || (mesAtual() && mesAtual().id) || '';
+    var lista = { id: carimbo(new Date()), dataISO: iso, data: isoParaBR(iso), mes: mesEsc,
       cab: t.cab, linhas: t.linhas, usuario: estado.nome, criadoEm: new Date().toISOString() };
     btn.disabled = true; msg.textContent = 'Salvando a lista…';
     salvarOuv(function (d) { d.listas.push(lista); return d; }, 'Ouvidorias: lista de ' + lista.data)
@@ -1245,7 +1264,9 @@
   function regOuv(inst, l) {
     var k = R.chaveInstalacao(inst); if (!k || !ouv.regs) return null;
     var desde, ate = '';
+    var m = mesDaLista(l);
     if (l.desde || l.ate) { desde = l.desde || ''; ate = l.ate || ''; }
+    else if (m && (m.desde || m.ate)) { desde = m.desde || ''; ate = m.ate || ''; }
     else { desde = l.dataISO; var p = primeiraListaDe(k); if (p && p < desde) desde = p; desde = seteDiasAntes(desde); }
     var rs = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && noPeriodo(r, desde, ate); });
     if (!rs.length) return null;
@@ -1266,7 +1287,20 @@
     if (manual && !listas.length) { avisar('Nenhuma lista com aba na planilha ainda.'); return Promise.resolve(false); }
     if (sincronizando || !listas.length || !window.Google.conectado()) return Promise.resolve(false);
     sincronizando = true;
-    return window.Google.lerPlanilha(linkPlanilhaOuv(), estado.chaveGoogle).then(function (g) {
+    // agrupa as listas pela planilha do mês e atualiza uma planilha de cada vez
+    var grupos = {};
+    listas.forEach(function (l) { var k = linkPlanilhaOuv(l); (grupos[k] = grupos[k] || []).push(l); });
+    var mudouAlgo = false;
+    return Object.keys(grupos).reduce(function (cad, link) {
+      return cad.then(function () { return sincUmaPlanilhaR6(link, grupos[link]).then(function (x) { if (x) mudouAlgo = true; }); });
+    }, Promise.resolve()).then(function () {
+      if (manual) avisar(mudouAlgo ? 'Planilhas de ouvidorias atualizadas.' : 'As planilhas de ouvidorias já estavam em dia.');
+      return true;
+    }).catch(function (e) { if (manual) avisar('Não consegui atualizar a planilha de ouvidorias: ' + e.message); return false; })
+      .then(function (x) { sincronizando = false; return x; });
+  }
+  function sincUmaPlanilhaR6(link, listas) {
+    return window.Google.lerPlanilha(link, estado.chaveGoogle).then(function (g) {
       var dados = [], formatos = [];
       listas.forEach(function (l) {
         var m = g.abas[l.aba], folha = g.folhas[l.aba]; if (!m || !m.length || !folha) return;
@@ -1306,12 +1340,8 @@
       });
       return window.Google.gravarIntervalos(g.id, dados)
         .then(function () { return formatos.length ? window.Google.lote(g.id, formatos) : null; })
-        .then(function () {
-          if (manual) avisar(dados.length || formatos.length ? 'Planilha de ouvidorias atualizada.' : 'A planilha de ouvidorias já estava em dia.');
-          return true;
-        });
-    }).catch(function (e) { if (manual) avisar('Não consegui atualizar a planilha de ouvidorias: ' + e.message); return false; })
-      .then(function (x) { sincronizando = false; return x; });
+        .then(function () { return !!(dados.length || formatos.length); });
+    });
   }
 
   function situacaoOuv(inst, l) {
@@ -1329,15 +1359,16 @@
       var c = colunasOuv(l.cab), q = nrm(ouv.filtro[l.id] || '');
       var feitos = l.linhas.filter(function (x) { var s = situacaoOuv(x[c.inst], l); return s && s.cls === 'ok'; }).length;
       var linhas = l.linhas.map(function (x, i) { return { x: x, i: i }; }).filter(function (o) { return !q || nrm(o.x.join(' ')).indexOf(q) >= 0; });
-      var abaLink = l.gid != null ? 'https://docs.google.com/spreadsheets/d/' + esc(l.planilhaId || (linkPlanilhaOuv().match(/\/d\/([\w-]+)/) || [])[1] || '') + '/edit#gid=' + l.gid : '';
+      var abaLink = l.gid != null ? 'https://docs.google.com/spreadsheets/d/' + esc(l.planilhaId || idPlan(linkPlanilhaOuv(l))) + '/edit#gid=' + l.gid : '';
       return '<details class="card ouv-lista"' + (li === 0 ? ' open' : '') + '><summary>' +
         '<h3>Lista de ' + esc(l.data) + '</h3><span class="ouv-chip"><b>' + num(l.linhas.length) + '</b> clientes</span>' +
         '<span class="ouv-chip" style="background:#e7f4ec;color:#1d5a37">' + num(feitos) + ' com ouvidoria enviada</span>' +
-        '<span class="ouv-chip" title="Só as ouvidorias registradas nesse período marcam os clientes desta lista">📅 ' + esc((l.desde || l.ate) ? textoPeriodo(l.desde, l.ate) : 'Período: regra antiga (3 dias antes da lista)') + '</span>' +
+        (function () { var m = mesDaLista(l), de = l.desde || (m && m.desde), at = l.ate || (m && m.ate);
+          return '<span class="ouv-chip">📗 ' + esc(m ? m.nome : 'Planilha de ouvidorias') + '</span>' +
+            '<span class="ouv-chip" title="Só as ouvidorias registradas nesse período marcam os clientes desta lista">📅 ' + esc((de || at) ? textoPeriodo(de, at) : 'Período: regra antiga (3 dias antes da lista)') + '</span>'; })() +
         '<span class="dica">por ' + esc(l.usuario || '') + '</span>' +
         '<span class="acoes">' + (l.aba ? '<a class="btn btn-peq" href="' + abaLink + '" target="_blank" rel="noopener">Abrir aba "' + esc(l.aba) + '"</a>'
           : '<button class="btn btn-peq" type="button" data-criar="' + esc(l.id) + '">Criar aba na planilha</button>') +
-        '<button class="btn btn-peq" type="button" data-periodo="' + esc(l.id) + '">📅 Período</button>' +
         '<button class="btn btn-link btn-peq" type="button" data-excluir="' + esc(l.id) + '">Excluir lista</button></span></summary>' +
         '<div class="ouv-resumo">' + chips(contar(l.linhas, c.classif)) + '</div>' +
         '<div class="ouv-filtro"><input class="campo" type="search" placeholder="Buscar cliente, instalação, colaborador…" data-busca="' + esc(l.id) + '" value="' + esc(ouv.filtro[l.id] || '') + '"></div>' +
@@ -1363,17 +1394,6 @@
           .catch(function (err) { avisar(err.message); b.disabled = false; b.textContent = 'Criar aba na planilha'; });
       };
     });
-    $$('[data-periodo]', box).forEach(function (b) {
-      b.onclick = function (e) {
-        e.preventDefault(); e.stopPropagation();
-        var l = ouv.dados.listas.filter(function (x) { return x.id === b.dataset.periodo; })[0]; if (!l) return;
-        caixaPeriodo(b, l.desde || seteDiasAntes(l.dataISO), l.ate || '', function (per) {
-        salvarOuv(function (d) { d.listas.forEach(function (x) { if (x.id === l.id) { x.desde = per.desde; x.ate = per.ate; } }); return d; }, 'Ouvidorias: período da lista de ' + l.data)
-          .then(function () { return ouvCarregarRegs().then(function () { return sincronizarPlanilhaOuv(false); }); })
-          .then(function () { renderOuv(); avisar('Lista de ' + l.data + ': ' + textoPeriodo(per.desde, per.ate) + '. Ouvidorias puxadas para a aba.'); });
-        });
-      };
-    });
     $$('[data-excluir]', box).forEach(function (b) {
       b.onclick = function (e) {
         e.preventDefault();
@@ -1395,8 +1415,16 @@
     return null;
   }
   function desenharAcomp() {
-    var box = $('#ouv-acomp'), ps = (ouv.dados && ouv.dados.acompanhadas) || [];
-    box.innerHTML = ps.length ? '<div class="tabela-wrap"><table class="ouv-tab"><thead><tr><th>Planilha</th><th>Reclamações</th><th>Pinta a linha</th><th>Período das ouvidorias</th><th>Última atualização</th><th></th></tr></thead><tbody>' +
+    var box = $('#ouv-acomp'), ps = (ouv.dados && ouv.dados.acompanhadas) || [], ms = mesesR6();
+    var linhasMes = ms.map(function (m, i) {
+      var nl = ((ouv.dados && ouv.dados.listas) || []).filter(function (l) { var x = mesDaLista(l); return x && x.id === m.id; }).length;
+      return '<tr><td class="cl"><a href="' + esc(m.link) + '" target="_blank" rel="noopener">' + esc(m.nome) + '</a>' + (m.atual ? ' <span class="ouv-chip" style="background:#e7f4ec;color:#1d5a37">recebe as listas novas</span>' : '') + '</td>' +
+        '<td>6 (listas por data)</td><td>Sim (verde / laranja)</td><td>' + esc(textoPeriodo(m.desde, m.ate)) + '</td><td>' + num(nl) + ' lista(s)</td>' +
+        '<td><button class="btn btn-peq" type="button" data-mes-per="' + i + '">📅 Período</button> ' +
+        (m.atual ? '' : '<button class="btn btn-link btn-peq" type="button" data-mes-atual="' + i + '">Receber as listas novas</button> ') +
+        '<button class="btn btn-link btn-peq" type="button" data-mes-ed="' + i + '">Editar</button></td></tr>';
+    }).join('');
+    box.innerHTML = (ps.length || ms.length) ? '<div class="tabela-wrap"><table class="ouv-tab"><thead><tr><th>Planilha</th><th>Reclamações</th><th>Pinta a linha</th><th>Período das ouvidorias</th><th>Última atualização</th><th></th></tr></thead><tbody>' + linhasMes +
       ps.map(function (p, i) {
         var u = ouv.ultimaAcomp && ouv.ultimaAcomp[p.nome];
         return '<tr><td class="cl"><a href="' + esc(p.link) + '" target="_blank" rel="noopener">' + esc(p.nome) + '</a></td>' +
@@ -1406,6 +1434,34 @@
           '<td><button class="btn btn-peq" type="button" data-acomp-per="' + i + '">📅 Período</button> <button class="btn btn-link btn-peq" type="button" data-acomp-ed="' + i + '">Editar</button> <button class="btn btn-link btn-peq" type="button" data-acomp-del="' + i + '">Tirar</button></td></tr>';
       }).join('') + '</tbody></table></div>' : '<p class="vazio">Nenhuma planilha ainda.</p>';
     $$('[data-acomp-ed]', box).forEach(function (b) { b.onclick = function () { editarAcomp(+b.dataset.acompEd); }; });
+    // planilhas do mês (Reclamação 6)
+    $$('[data-mes-per]', box).forEach(function (b) {
+      b.onclick = function () {
+        var m = ms[+b.dataset.mesPer]; if (!m) return;
+        caixaPeriodo(b, m.desde || '', m.ate || '', function (per) {
+          salvarOuv(function (d) { d.mesesR6.forEach(function (x) { if (x.id === m.id) { x.desde = per.desde; x.ate = per.ate; } }); return d; }, 'Ouvidorias: período da planilha ' + m.nome)
+            .then(function () { return ouvCarregarRegs().then(function () { return sincronizarPlanilhaOuv(false); }); })
+            .then(function () { renderOuv(); desenharAcomp(); avisar(m.nome + ': ' + textoPeriodo(per.desde, per.ate) + '. Ouvidorias puxadas para as abas.'); });
+        });
+      };
+    });
+    $$('[data-mes-atual]', box).forEach(function (b) {
+      b.onclick = function () {
+        var m = ms[+b.dataset.mesAtual]; if (!m) return;
+        salvarOuv(function (d) { d.mesesR6.forEach(function (x) { x.atual = x.id === m.id; }); return d; }, 'Ouvidorias: listas novas vão para ' + m.nome)
+          .then(function () { renderOuv(); desenharAcomp(); avisar('As listas novas vão para ' + m.nome + '.'); });
+      };
+    });
+    $$('[data-mes-ed]', box).forEach(function (b) {
+      b.onclick = function () {
+        var m = ms[+b.dataset.mesEd]; if (!m) return;
+        var nome = window.prompt('Nome da planilha:', m.nome); if (!nome) return;
+        var link = window.prompt('Link da planilha (Google Planilhas):', m.link); if (!link) return;
+        if (!/\/spreadsheets\/d\//.test(link)) { avisar('Esse não parece um link do Google Planilhas.'); return; }
+        salvarOuv(function (d) { d.mesesR6.forEach(function (x) { if (x.id === m.id) { x.nome = nome.trim(); x.link = link.trim(); } }); return d; }, 'Ouvidorias: planilha ' + nome.trim())
+          .then(function () { renderOuv(); desenharAcomp(); });
+      };
+    });
     $$('[data-acomp-per]', box).forEach(function (b) {
       b.onclick = function () {
         var p = ps[+b.dataset.acompPer]; if (!p) return;
@@ -1456,7 +1512,25 @@
       .then(function () { sincAcomp = false; });
   }
   $('#ouv-acomp-novo').addEventListener('click', function () { editarAcomp(null); });
-  $('#ouv-acomp-sinc').addEventListener('click', function () { sincronizarAcomp(true); });
+  // cria a planilha do Google do mês novo (ou usa um link já existente) e passa a receber as listas novas
+  $('#ouv-mes-novo').addEventListener('click', function () {
+    var msg = $('#ouv-acomp-msg');
+    var mesNome = window.prompt('Planilha nova da Reclamação 6. De qual mês? (ex.: Novembro)', ''); if (!mesNome) return;
+    var nome = 'Ouvidorias Faturas ' + mesNome.trim() + ' – Reclamação 6';
+    var link = window.prompt('Link da planilha do Google, se ela já existir.\n\nDeixe em branco para a plataforma criar "' + nome + '" no seu Google Drive.', '');
+    if (link === null) return; link = link.trim();
+    if (link && !/\/spreadsheets\/d\//.test(link)) { avisar('Esse não parece um link do Google Planilhas.'); return; }
+    var criar = link ? Promise.resolve(link) : (window.Google.conectado()
+      ? window.Google.criarPlanilha(nome).then(function (g) { return g.link || g.spreadsheetUrl || ('https://docs.google.com/spreadsheets/d/' + (g.id || g.spreadsheetId) + '/edit'); })
+      : Promise.reject(new Error('Conecte o Google (no topo) para a plataforma criar a planilha, ou cole o link de uma planilha que já existe.')));
+    msg.textContent = link ? 'Salvando…' : 'Criando a planilha no Google…';
+    criar.then(function (lk) {
+      var novo = { id: 'r6-' + carimbo(new Date()), nome: nome, link: lk, desde: hojeISO(), ate: '', atual: true };
+      return salvarOuv(function (d) { d.mesesR6.forEach(function (x) { x.atual = false; }); d.mesesR6.push(novo); return d; }, 'Ouvidorias: planilha nova ' + nome)
+        .then(function () { renderOuv(); desenharAcomp(); msg.textContent = nome + ' criada. As listas novas vão para ela, com ouvidorias de ' + isoParaBR(novo.desde) + ' em diante (mude em 📅 Período).'; });
+    }).catch(function (e) { msg.textContent = 'Não consegui criar: ' + e.message; });
+  });
+  $('#ouv-acomp-sinc').addEventListener('click', function () { ouvCarregarRegs().then(function () { return sincronizarPlanilhaOuv(true); }).then(function () { return sincronizarAcomp(true); }); });
 
   $$('.abas button[data-aba="ouvidorias"]').forEach(function (b) { b.addEventListener('click', function () { carregarOuv(); }); });
   window.addEventListener('focus', function () { if (!$('[data-painel="ouvidorias"]').hidden && estado.repo) carregarOuv(); });
