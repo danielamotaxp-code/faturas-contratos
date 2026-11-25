@@ -1265,9 +1265,12 @@
   // ouvidorias de antes do campo: as Reclamações 6 são de outubro/2026; as outras ficam sem mês
   function mesRefDe(r) { return r.mesRef || (+r.reclamacao === 6 ? '2026-10' : ''); }
   function nomeMesRef(iso) { var p = String(iso || '').split('-'); return p.length === 2 ? NOMES_MES[+p[1] - 1] + '/' + p[0] : ''; }
-  function textoMeses(ms) { return (ms || []).filter(Boolean).map(nomeMesRef).join(', '); }
+  // "todos" = puxa as ouvidorias de qualquer mês de referência
+  function todosMeses(ms) { return (ms || []).indexOf('todos') >= 0; }
+  function textoMeses(ms) { return todosMeses(ms) ? 'Todos os meses' : (ms || []).filter(Boolean).map(nomeMesRef).join(', '); }
   // "11/2026, 12/2026" → ['2026-11', '2026-12']
   function lerMeses(t) {
+    if (/todos/i.test(String(t || ''))) return ['todos'];
     var out = []; String(t || '').replace(/(\d{1,2})\s*\/\s*(\d{4})/g, function (_, m, a) { if (+m >= 1 && +m <= 12) out.push(a + '-' + ('0' + m).slice(-2)); return _; });
     return out.filter(function (x, i) { return out.indexOf(x) === i; }).sort();
   }
@@ -1280,16 +1283,19 @@
     var cx = document.createElement('span'); cx.className = 'ouv-periodo';
     cx.style.cssText = 'display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 4px 6px;padding:6px 8px;border:1px solid #c9d3df;border-radius:8px;background:#f6f9fc';
     var inp = function (v) { return '<input type="month" class="campo" style="width:auto" data-mes value="' + esc(v || '') + '">'; };
-    cx.innerHTML = '<span>Mês de referência</span><span data-lista style="display:inline-flex;gap:6px;flex-wrap:wrap">' + ((meses && meses.length ? meses : ['']).map(inp).join('')) + '</span>' +
+    var tds = todosMeses(meses); if (tds) meses = [];
+    cx.innerHTML = '<label style="display:inline-flex;gap:4px;align-items:center"><input type="checkbox" data-todos' + (tds ? ' checked' : '') + '> Todos os meses</label>' +
+      '<span>ou mês de referência</span><span data-lista style="display:inline-flex;gap:6px;flex-wrap:wrap">' + ((meses && meses.length ? meses : ['']).map(inp).join('')) + '</span>' +
       '<button class="btn btn-link btn-peq" type="button" data-mais>+ outro mês</button>' +
       '<button class="btn btn-peq" type="button" data-aplicar>Aplicar e puxar as ouvidorias</button>' +
       '<button class="btn btn-link btn-peq" type="button" data-fechar>Cancelar</button>' +
-      '<small style="flex-basis:100%">Só ficam verdes as ouvidorias cadastradas com esse mês de referência. As de outros meses aparecem na coluna "Ouvidorias de outros meses".</small>';
+      '<small style="flex-basis:100%">Só ficam verdes as ouvidorias cadastradas com esse mês de referência; as de outros meses aparecem na coluna "Ouvidorias de outros meses". Com "Todos os meses", vale a ouvidoria mais recente de qualquer mês.</small>';
     ['click', 'keydown'].forEach(function (ev) { cx.addEventListener(ev, function (e) { e.stopPropagation(); if (ev === 'click' && e.target.tagName !== 'INPUT') e.preventDefault(); }); });
     if (sum) { sum.insertAdjacentElement('afterend', cx); sum.parentNode.open = true; } else botao.insertAdjacentElement('afterend', cx);
     cx.querySelector('[data-mais]').onclick = function () { cx.querySelector('[data-lista]').insertAdjacentHTML('beforeend', inp('')); };
     cx.querySelector('[data-fechar]').onclick = function () { cx.remove(); };
     cx.querySelector('[data-aplicar]').onclick = function () {
+      if (cx.querySelector('[data-todos]').checked) { this.disabled = true; this.textContent = 'Puxando…'; aplicar(['todos']); return; }
       var ms = $$('[data-mes]', cx).map(function (x) { return x.value; }).filter(Boolean);
       ms = ms.filter(function (x, i) { return ms.indexOf(x) === i; }).sort();
       if (!ms.length) { avisar('Escolha o mês de referência.'); return; }
@@ -1304,7 +1310,7 @@
     var desde, ate = '';
     var m = mesDaLista(l);
     if (m && m.meses && m.meses.length) {
-      var rm = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && m.meses.indexOf(mesRefDe(r)) >= 0; });
+      var rm = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && (todosMeses(m.meses) || m.meses.indexOf(mesRefDe(r)) >= 0); });
       if (!rm.length) return null;
       rm.sort(function (a, b) { return String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')); });
       return rm.filter(function (r) { return r.status !== 'pendente'; })[0] || rm[0];
@@ -1355,7 +1361,7 @@
         var ultimaCol = cab.length, primeiraCol = Math.max(0, cab.findIndex(function (h) { return h; })); // pinta só a tabela, não colunas vazias à esquerda
         // coluna "Ouvidorias de outros meses" (histórico) no fim da tabela
         var mm = mesDaLista(l), meses = (mm && mm.meses) || [], chist = -1;
-        if (meses.length) {
+        if (meses.length && !todosMeses(meses)) {
           chist = cab.indexOf(nrm('Ouvidorias de outros meses'));
           if (chist < 0) {
             while (ultimaCol > 0 && !cab[ultimaCol - 1]) ultimaCol--;
@@ -1558,9 +1564,9 @@
     var rq = window.prompt('Quais reclamações valem para essa planilha? (ex.: 7, 8)\nDeixe vazio para usar a coluna "Reclamação N" de cada linha, ou qualquer reclamação se não houver essa coluna.', (p.reclamacoes || []).join(', '));
     if (rq === null) return;
     var reclamacoes = (rq.match(/\d+/g) || []).map(Number);
-    var mt = window.prompt('Mês de referência da planilha (mm/aaaa). Só ficam verdes as ouvidorias cadastradas com esse mês.\nSe for mais de um, separe por vírgula (ex.: 10/2026, 11/2026).', (p.meses || []).map(isoParaMMAA).join(', '));
+    var mt = window.prompt('Mês de referência da planilha (mm/aaaa). Só ficam verdes as ouvidorias cadastradas com esse mês.\nSe for mais de um, separe por vírgula (ex.: 10/2026, 11/2026). Para puxar de todos os meses, escreva: todos', (p.meses || []).map(isoParaMMAA).join(', '));
     if (mt === null) return;
-    var meses = lerMeses(mt); if (!meses.length) { avisar('Escreva o mês de referência assim: 11/2026.'); return; }
+    var meses = lerMeses(mt); if (!meses.length) { avisar('Escreva o mês de referência assim: 11/2026 (ou "todos").'); return; }
     var novo = { nome: nome.trim(), link: link.trim(), colorir: colorir, reclamacoes: reclamacoes, meses: meses, desde: p.desde || '' };
     salvarOuv(function (dd) {
       dd.acompanhadas = dd.acompanhadas || [];
@@ -1589,6 +1595,7 @@
     var msg = $('#ouv-acomp-msg');
     var mt = window.prompt('Planilha nova da Reclamação 6. Mês de referência (mm/aaaa), ex.: 11/2026', ''); if (!mt) return;
     var meses = lerMeses(mt); if (!meses.length) { avisar('Escreva o mês de referência assim: 11/2026.'); return; }
+    if (todosMeses(meses)) { avisar('A planilha do mês precisa de um mês (ex.: 11/2026). Depois dá para trocar para "Todos os meses" no botão 📅.'); return; }
     var nome = 'Ouvidorias Faturas ' + NOMES_MES[+meses[0].split('-')[1] - 1] + ' – Reclamação 6';
     var link = window.prompt('Link da planilha do Google, se ela já existir.\n\nDeixe em branco para a plataforma criar "' + nome + '" no seu Google Drive.', '');
     if (link === null) return; link = link.trim();
