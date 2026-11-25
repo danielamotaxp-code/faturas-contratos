@@ -117,26 +117,47 @@
   };
 
   Repositorio.prototype.gravarBytes = function (caminho, bytes, mensagem, sha) {
-    var corpo = { message: mensagem, content: bytesParaBase64(bytes) };
-    if (sha) corpo.sha = sha;
-    return this.req(caminhoUrl(caminho), { method: 'PUT', body: JSON.stringify(corpo), headers: { 'Content-Type': 'application/json' } }).then(function (r) {
-      if (r.status === 409 || r.status === 422) { var e = new Error('conflito'); e.conflito = true; throw e; }
-      if (!r.ok) throw new Error('Falha ao salvar ' + caminho + ' (' + r.status + ').');
-      return r.json();
-    });
+    var self = this, conteudo = bytesParaBase64(bytes), tentativa = 0;
+    function gravar(shaUsado) {
+      tentativa++;
+      var corpo = { message: mensagem, content: conteudo };
+      if (shaUsado) corpo.sha = shaUsado;
+      return self.req(caminhoUrl(caminho), { method: 'PUT', body: JSON.stringify(corpo), headers: { 'Content-Type': 'application/json' } }).then(function (r) {
+        if (r.status === 409 || r.status === 422) {
+          // Quem pediu com sha cuida do conflito (atualizarJSON lê de novo e repete).
+          // Arquivo novo (sem sha): o GitHub recusa quando outra gravação acabou de acontecer no repositório
+          // (por exemplo, uma exclusão ainda terminando) — espera um pouco e tenta de novo; se o arquivo já existir, substitui.
+          if (!sha && tentativa < 5) {
+            return new Promise(function (ok) { setTimeout(ok, 800 * tentativa); })
+              .then(function () { return self.info(caminho); })
+              .then(function (meta) { return gravar(meta && meta.sha); });
+          }
+          var e = new Error('conflito'); e.conflito = true; throw e;
+        }
+        if (!r.ok) throw new Error('Falha ao salvar ' + caminho + ' (' + r.status + ').');
+        return r.json();
+      });
+    }
+    return gravar(sha);
   };
 
   /** Apaga um arquivo (se existir). */
   Repositorio.prototype.apagar = function (caminho, mensagem) {
-    var self = this;
-    return this.info(caminho).then(function (meta) {
-      if (!meta) return false;
-      return self.req(caminhoUrl(caminho), { method: 'DELETE', body: JSON.stringify({ message: mensagem, sha: meta.sha }),
-        headers: { 'Content-Type': 'application/json' } }).then(function (r) {
-        if (!r.ok && r.status !== 404) throw new Error('Falha ao apagar ' + caminho + ' (' + r.status + ').');
-        return true;
+    var self = this, tentativa = 0;
+    function apagar() {
+      tentativa++;
+      return self.info(caminho).then(function (meta) {
+        if (!meta) return false;
+        return self.req(caminhoUrl(caminho), { method: 'DELETE', body: JSON.stringify({ message: mensagem, sha: meta.sha }),
+          headers: { 'Content-Type': 'application/json' } }).then(function (r) {
+          // outra gravação no mesmo instante: espera e tenta de novo
+          if ((r.status === 409 || r.status === 422) && tentativa < 5) return new Promise(function (ok) { setTimeout(ok, 800 * tentativa); }).then(apagar);
+          if (!r.ok && r.status !== 404) throw new Error('Falha ao apagar ' + caminho + ' (' + r.status + ').');
+          return true;
+        });
       });
-    });
+    }
+    return apagar();
   };
 
   /**
