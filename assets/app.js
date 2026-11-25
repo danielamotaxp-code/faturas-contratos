@@ -1167,7 +1167,8 @@
     var t = ouv.previa, btn = this, msg = $('#ouv-msg');
     if (!t) return;
     var iso = $('#ouv-data').value || hojeISO();
-    var lista = { id: carimbo(new Date()), dataISO: iso, data: isoParaBR(iso),
+    var per = pedirPeriodo('desta lista', seteDiasAntes(iso), ''); if (!per) return;
+    var lista = { id: carimbo(new Date()), dataISO: iso, data: isoParaBR(iso), desde: per.desde, ate: per.ate,
       cab: t.cab, linhas: t.linhas, usuario: estado.nome, criadoEm: new Date().toISOString() };
     btn.disabled = true; msg.textContent = 'Salvando a lista…';
     salvarOuv(function (d) { d.listas.push(lista); return d; }, 'Ouvidorias: lista de ' + lista.data)
@@ -1198,11 +1199,55 @@
     });
     return menor;
   }
-  function regOuv(inst, desde) {
+  /* ---------- período das ouvidorias (de / até), escolhido em cada lista e em cada planilha ---------- */
+  function brParaISO(t) { var d = String(t || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return d ? d[3] + '-' + ('0' + d[2]).slice(-2) + '-' + ('0' + d[1]).slice(-2) : ''; }
+  function textoPeriodo(desde, ate) {
+    if (!desde && !ate) return 'Todas as ouvidorias';
+    if (!ate) return 'De ' + isoParaBR(desde) + ' em diante';
+    if (!desde) return 'Até ' + isoParaBR(ate);
+    return 'De ' + isoParaBR(desde) + ' até ' + isoParaBR(ate);
+  }
+  // pergunta "de" e "até"; devolve null se a pessoa cancelar
+  function pedirPeriodo(onde, desde, ate) {
+    var a = window.prompt('Período das ouvidorias ' + onde + '\n\nConsiderar as ouvidorias registradas a partir de (dd/mm/aaaa):', isoParaBR(desde || ''));
+    if (a === null) return null;
+    var b = window.prompt('Até (dd/mm/aaaa)?\n\nDeixe em branco enquanto a rodada estiver aberta (vale até hoje e os próximos dias).', isoParaBR(ate || ''));
+    if (b === null) return null;
+    var de = brParaISO(a), at = brParaISO(b);
+    if (de && at && at < de) { avisar('A data "até" ficou antes da data "de". Escolha o período de novo.'); return null; }
+    return { desde: de, ate: at };
+  }
+  // abre, ao lado do botão, os campos "de" e "até" (calendário) e o botão para aplicar e puxar as ouvidorias
+  function caixaPeriodo(botao, desde, ate, aplicar) {
+    // dentro do título de uma lista (summary), a caixa vai logo abaixo do título, com a lista aberta
+    var sum = botao.closest('summary'), lugar = sum ? sum.parentNode : botao.parentNode;
+    var aberta = lugar.querySelector('.ouv-periodo');
+    if (aberta) { aberta.remove(); return; }
+    var cx = document.createElement('span'); cx.className = 'ouv-periodo';
+    cx.style.cssText = 'display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 4px 6px;padding:6px 8px;border:1px solid #c9d3df;border-radius:8px;background:#f6f9fc';
+    cx.innerHTML = '<label>De <input type="date" class="campo" style="width:auto" data-de value="' + esc(desde || '') + '"></label>' +
+      '<label>até <input type="date" class="campo" style="width:auto" data-ate value="' + esc(ate || '') + '"></label>' +
+      '<button class="btn btn-peq" type="button" data-aplicar>Aplicar e puxar as ouvidorias</button>' +
+      '<button class="btn btn-link btn-peq" type="button" data-fechar>Cancelar</button>' +
+      '<small style="flex-basis:100%">"Até" em branco = rodada aberta (as ouvidorias novas continuam entrando).</small>';
+    ['click', 'keydown'].forEach(function (ev) { cx.addEventListener(ev, function (e) { e.stopPropagation(); if (ev === 'click' && e.target.tagName !== 'INPUT') e.preventDefault(); }); });
+    if (sum) { sum.insertAdjacentElement('afterend', cx); sum.parentNode.open = true; } else botao.insertAdjacentElement('afterend', cx);
+    cx.querySelector('[data-fechar]').onclick = function () { cx.remove(); };
+    cx.querySelector('[data-aplicar]').onclick = function () {
+      var de = cx.querySelector('[data-de]').value, at = cx.querySelector('[data-ate]').value;
+      if (de && at && at < de) { avisar('A data "até" ficou antes da data "de".'); return; }
+      this.disabled = true; this.textContent = 'Puxando…';
+      aplicar({ desde: de, ate: at });
+    };
+  }
+  function noPeriodo(r, desde, ate) { var d = String(r.criadoEm || '').slice(0, 10); return (!desde || d >= desde) && (!ate || d <= ate); }
+  // l = a lista (com o período escolhido). Listas antigas, sem período: regra de antes (3 dias antes da primeira lista do cliente).
+  function regOuv(inst, l) {
     var k = R.chaveInstalacao(inst); if (!k || !ouv.regs) return null;
-    var p = primeiraListaDe(k); if (p && p < desde) desde = p;
-    desde = seteDiasAntes(desde);
-    var rs = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && String(r.criadoEm || '').slice(0, 10) >= desde; });
+    var desde, ate = '';
+    if (l.desde || l.ate) { desde = l.desde || ''; ate = l.ate || ''; }
+    else { desde = l.dataISO; var p = primeiraListaDe(k); if (p && p < desde) desde = p; desde = seteDiasAntes(desde); }
+    var rs = ouv.regs.filter(function (r) { return +r.reclamacao === 6 && R.chaveInstalacao(r.instalacao) === k && noPeriodo(r, desde, ate); });
     if (!rs.length) return null;
     rs.sort(function (a, b) { return String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')); }); // a mais recente
     return rs.filter(function (r) { return r.status !== 'pendente'; })[0] || rs[0];
@@ -1231,7 +1276,7 @@
         var cs = COLS_AUTO.map(function (h) { return cab.indexOf(nrm(h)); });
         var ultimaCol = cab.length, primeiraCol = Math.max(0, cab.findIndex(function (h) { return h; })); // pinta só a tabela, não colunas vazias à esquerda
         m.slice(hl + 1).forEach(function (linha, j) {
-          var r = regOuv(linha[ci], l.dataISO); if (!r) return;
+          var r = regOuv(linha[ci], l); if (!r) return;
           var lin = hl + j + 2, quem = r.responsavel || '', pend = r.status === 'pendente';
           var val = [pend ? 'Não enviada (problema no site)' : 'Enviada', pend ? '' : (r.protocolo || ''),
             isoParaBR(String((pend ? r.ultimaTentativa : r.dataAbertura) || r.criadoEm || '').slice(0, 10))];
@@ -1269,8 +1314,8 @@
       .then(function (x) { sincronizando = false; return x; });
   }
 
-  function situacaoOuv(inst, desde) {
-    var r0 = regOuv(inst, desde); if (!r0) return null;
+  function situacaoOuv(inst, l) {
+    var r0 = regOuv(inst, l); if (!r0) return null;
     var rs = [r0];
     var env = rs.filter(function (r) { return r.status !== 'pendente'; })[0];
     return env ? { cls: 'ok', txt: 'Enviada' + (env.protocolo ? ' · ' + env.protocolo : '') } : { cls: 'pend', txt: 'Não enviada (problema no site)' };
@@ -1282,22 +1327,24 @@
     if (!listas.length) { box.innerHTML = '<div class="card"><p class="vazio">Nenhuma lista ainda. Cole a primeira lista acima.</p></div>'; return; }
     box.innerHTML = listas.map(function (l, li) {
       var c = colunasOuv(l.cab), q = nrm(ouv.filtro[l.id] || '');
-      var feitos = l.linhas.filter(function (x) { var s = situacaoOuv(x[c.inst], l.dataISO); return s && s.cls === 'ok'; }).length;
+      var feitos = l.linhas.filter(function (x) { var s = situacaoOuv(x[c.inst], l); return s && s.cls === 'ok'; }).length;
       var linhas = l.linhas.map(function (x, i) { return { x: x, i: i }; }).filter(function (o) { return !q || nrm(o.x.join(' ')).indexOf(q) >= 0; });
       var abaLink = l.gid != null ? 'https://docs.google.com/spreadsheets/d/' + esc(l.planilhaId || (linkPlanilhaOuv().match(/\/d\/([\w-]+)/) || [])[1] || '') + '/edit#gid=' + l.gid : '';
       return '<details class="card ouv-lista"' + (li === 0 ? ' open' : '') + '><summary>' +
         '<h3>Lista de ' + esc(l.data) + '</h3><span class="ouv-chip"><b>' + num(l.linhas.length) + '</b> clientes</span>' +
         '<span class="ouv-chip" style="background:#e7f4ec;color:#1d5a37">' + num(feitos) + ' com ouvidoria enviada</span>' +
+        '<span class="ouv-chip" title="Só as ouvidorias registradas nesse período marcam os clientes desta lista">📅 ' + esc((l.desde || l.ate) ? textoPeriodo(l.desde, l.ate) : 'Período: regra antiga (3 dias antes da lista)') + '</span>' +
         '<span class="dica">por ' + esc(l.usuario || '') + '</span>' +
         '<span class="acoes">' + (l.aba ? '<a class="btn btn-peq" href="' + abaLink + '" target="_blank" rel="noopener">Abrir aba "' + esc(l.aba) + '"</a>'
           : '<button class="btn btn-peq" type="button" data-criar="' + esc(l.id) + '">Criar aba na planilha</button>') +
+        '<button class="btn btn-peq" type="button" data-periodo="' + esc(l.id) + '">📅 Período</button>' +
         '<button class="btn btn-link btn-peq" type="button" data-excluir="' + esc(l.id) + '">Excluir lista</button></span></summary>' +
         '<div class="ouv-resumo">' + chips(contar(l.linhas, c.classif)) + '</div>' +
         '<div class="ouv-filtro"><input class="campo" type="search" placeholder="Buscar cliente, instalação, colaborador…" data-busca="' + esc(l.id) + '" value="' + esc(ouv.filtro[l.id] || '') + '"></div>' +
         '<div class="tabela-wrap"><table class="ouv-tab"><thead><tr>' + (c.colab >= 0 ? '<th>Colaborador</th>' : '') + '<th>Cliente</th><th>Instalação</th><th>UC</th>' + (c.classif >= 0 ? '<th>Classificação</th>' : '') + '<th>Ouvidoria</th><th></th></tr></thead><tbody>' +
         linhas.map(function (o) {
-          var x = o.x, s = situacaoOuv(x[c.inst], l.dataISO);
-          var rg = regOuv(x[c.inst], l.dataISO);
+          var x = o.x, s = situacaoOuv(x[c.inst], l);
+          var rg = regOuv(x[c.inst], l);
           return '<tr>' + (c.colab >= 0 ? '<td>' + esc(x[c.colab] || (rg && rg.responsavel) || '') + '</td>' : '') + '<td class="cl">' + esc(x[c.cliente]) + '</td><td>' + esc(x[c.inst]) + '</td><td>' + esc(c.uc >= 0 ? x[c.uc] : '') + '</td>' +
             (c.classif >= 0 ? '<td class="cl">' + esc(x[c.classif]) + '</td>' : '') +
             '<td>' + (s ? '<span class="ouv-sit ' + s.cls + '">' + esc(s.txt) + '</span>' : '<span class="ouv-sit nao">Não gerada</span>') + '</td>' +
@@ -1314,6 +1361,17 @@
         b.disabled = true; b.textContent = 'Criando…';
         criarAbaGoogle(l).then(function () { return ouvCarregarRegs().then(function () { return sincronizarPlanilhaOuv(false); }); }).then(function () { avisar('Aba criada na planilha de ouvidorias, com as ouvidorias já registradas marcadas.'); renderOuv(); })
           .catch(function (err) { avisar(err.message); b.disabled = false; b.textContent = 'Criar aba na planilha'; });
+      };
+    });
+    $$('[data-periodo]', box).forEach(function (b) {
+      b.onclick = function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var l = ouv.dados.listas.filter(function (x) { return x.id === b.dataset.periodo; })[0]; if (!l) return;
+        caixaPeriodo(b, l.desde || seteDiasAntes(l.dataISO), l.ate || '', function (per) {
+        salvarOuv(function (d) { d.listas.forEach(function (x) { if (x.id === l.id) { x.desde = per.desde; x.ate = per.ate; } }); return d; }, 'Ouvidorias: período da lista de ' + l.data)
+          .then(function () { return ouvCarregarRegs().then(function () { return sincronizarPlanilhaOuv(false); }); })
+          .then(function () { renderOuv(); avisar('Lista de ' + l.data + ': ' + textoPeriodo(per.desde, per.ate) + '. Ouvidorias puxadas para a aba.'); });
+        });
       };
     });
     $$('[data-excluir]', box).forEach(function (b) {
@@ -1338,16 +1396,25 @@
   }
   function desenharAcomp() {
     var box = $('#ouv-acomp'), ps = (ouv.dados && ouv.dados.acompanhadas) || [];
-    box.innerHTML = ps.length ? '<div class="tabela-wrap"><table class="ouv-tab"><thead><tr><th>Planilha</th><th>Reclamações</th><th>Pinta a linha</th><th>Ouvidorias desde</th><th>Última atualização</th><th></th></tr></thead><tbody>' +
+    box.innerHTML = ps.length ? '<div class="tabela-wrap"><table class="ouv-tab"><thead><tr><th>Planilha</th><th>Reclamações</th><th>Pinta a linha</th><th>Período das ouvidorias</th><th>Última atualização</th><th></th></tr></thead><tbody>' +
       ps.map(function (p, i) {
         var u = ouv.ultimaAcomp && ouv.ultimaAcomp[p.nome];
         return '<tr><td class="cl"><a href="' + esc(p.link) + '" target="_blank" rel="noopener">' + esc(p.nome) + '</a></td>' +
           '<td>' + ((p.reclamacoes || []).length ? p.reclamacoes.join(', ') : 'Pela coluna da planilha') + '</td>' +
-          '<td>' + (p.colorir ? 'Sim (verde / laranja)' : 'Não (mantém as cores)') + '</td><td>' + esc(isoParaBR(p.desde || '')) + '</td>' +
+          '<td>' + (p.colorir ? 'Sim (verde / laranja)' : 'Não (mantém as cores)') + '</td><td>' + esc(textoPeriodo(p.desde, p.ate)) + '</td>' +
           '<td>' + (u ? (u.erro ? '<span class="erro">' + esc(u.erro) + '</span>' : num(u.linhas) + ' linha(s) atualizada(s)') : '—') + '</td>' +
-          '<td><button class="btn btn-link btn-peq" type="button" data-acomp-ed="' + i + '">Editar</button> <button class="btn btn-link btn-peq" type="button" data-acomp-del="' + i + '">Tirar</button></td></tr>';
+          '<td><button class="btn btn-peq" type="button" data-acomp-per="' + i + '">📅 Período</button> <button class="btn btn-link btn-peq" type="button" data-acomp-ed="' + i + '">Editar</button> <button class="btn btn-link btn-peq" type="button" data-acomp-del="' + i + '">Tirar</button></td></tr>';
       }).join('') + '</tbody></table></div>' : '<p class="vazio">Nenhuma planilha ainda.</p>';
     $$('[data-acomp-ed]', box).forEach(function (b) { b.onclick = function () { editarAcomp(+b.dataset.acompEd); }; });
+    $$('[data-acomp-per]', box).forEach(function (b) {
+      b.onclick = function () {
+        var p = ps[+b.dataset.acompPer]; if (!p) return;
+        caixaPeriodo(b, p.desde || '', p.ate || '', function (per) {
+          salvarOuv(function (d) { (d.acompanhadas || []).forEach(function (x) { if (x.nome === p.nome) { x.desde = per.desde; x.ate = per.ate; } }); return d; }, 'Ouvidorias: período da planilha ' + p.nome)
+            .then(function () { desenharAcomp(); avisar(p.nome + ': ' + textoPeriodo(per.desde, per.ate) + '.'); return ouvCarregarRegs().then(function () { return sincronizarAcomp(true); }); });
+        });
+      };
+    });
     $$('[data-acomp-del]', box).forEach(function (b) {
       b.onclick = function () {
         if (b.dataset.conf !== '1') { b.dataset.conf = '1'; b.textContent = 'Tirar mesmo?'; return; }
@@ -1365,9 +1432,8 @@
     var rq = window.prompt('Quais reclamações valem para essa planilha? (ex.: 7, 8)\nDeixe vazio para usar a coluna "Reclamação N" de cada linha, ou qualquer reclamação se não houver essa coluna.', (p.reclamacoes || []).join(', '));
     if (rq === null) return;
     var reclamacoes = (rq.match(/\d+/g) || []).map(Number);
-    var desde = window.prompt('Considerar ouvidorias registradas a partir de (dd/mm/aaaa):', isoParaBR(p.desde || hojeISO())) || '';
-    var d = desde.match(/(\d{2})\/(\d{2})\/(\d{4})/), iso = d ? d[3] + '-' + d[2] + '-' + d[1] : (p.desde || hojeISO());
-    var novo = { nome: nome.trim(), link: link.trim(), colorir: colorir, reclamacoes: reclamacoes, desde: iso };
+    var per = pedirPeriodo('da planilha ' + nome.trim(), p.desde || hojeISO(), p.ate || ''); if (!per) return;
+    var novo = { nome: nome.trim(), link: link.trim(), colorir: colorir, reclamacoes: reclamacoes, desde: per.desde, ate: per.ate };
     salvarOuv(function (dd) {
       dd.acompanhadas = dd.acompanhadas || [];
       if (i != null) dd.acompanhadas = dd.acompanhadas.map(function (x) { return x.nome === p.nome ? novo : x; }); else dd.acompanhadas.push(novo);
